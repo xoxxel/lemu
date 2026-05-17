@@ -126,6 +126,19 @@ function DataView({ data }: { data: Record<string, unknown> }) {
   if (d.type === 'shell' && typeof d.stdout === 'string') {
     return <pre className="file-content">{(d.stdout as string) || (d.stderr as string) || '(no output)'}</pre>;
   }
+  if (d.type === 'browser' && typeof d.content === 'string') {
+    return (
+      <div className="browser-preview">
+        <div className="browser-preview-bar">{d.path as string}</div>
+        <iframe
+          className="browser-preview-frame"
+          srcDoc={d.content as string}
+          title="browser preview"
+          sandbox="allow-scripts"
+        />
+      </div>
+    );
+  }
   return null;
 }
 

@@ -191,6 +191,54 @@ app.post('/api/shell/exec', async (req, res) => {
   }
 });
 
+// File tree endpoint
+app.get('/api/fs/tree', async (req, res) => {
+  try {
+    const dir = (req.query.dir as string) || '.';
+    const depth = Math.min(parseInt(req.query.depth as string) || 2, 5);
+    const target = path.resolve(WORKSPACE, dir);
+    if (!target.startsWith(WORKSPACE)) return res.json({ success: false, error: 'Path outside workspace' });
+
+    async function buildTree(dirPath: string, remaining: number): Promise<string[]> {
+      if (remaining <= 0) return ['  ...'];
+      const entries = await fs.readdir(dirPath, { withFileTypes: true });
+      const lines: string[] = [];
+      for (const e of entries) {
+        if (e.name.startsWith('.') || e.name === 'node_modules') continue;
+        const fullPath = path.join(dirPath, e.name);
+        const relPath = path.relative(WORKSPACE, fullPath);
+        if (e.isDirectory()) {
+          lines.push(`  ${relPath}/`);
+          if (remaining > 1) {
+            const sub = await buildTree(fullPath, remaining - 1);
+            lines.push(...sub.map((l) => `  ${l}`));
+          }
+        } else {
+          lines.push(`  ${relPath}`);
+        }
+      }
+      return lines;
+    }
+
+    const tree = await buildTree(target, depth);
+    res.json({ success: true, tree: tree.join('\n') });
+  } catch (err) {
+    res.json({ success: false, error: (err as Error).message });
+  }
+});
+
+// Serve files for browser preview
+app.get('/preview/*', async (req, res) => {
+  try {
+    const filePath = (req.params as Record<string, string>)['0'];
+    const target = path.resolve(WORKSPACE, filePath);
+    if (!target.startsWith(WORKSPACE)) return res.status(403).send('Forbidden');
+    res.sendFile(target);
+  } catch {
+    res.status(404).send('Not found');
+  }
+});
+
 // Get workspace info
 app.get('/api/workspace', (req, res) => {
   res.json({
