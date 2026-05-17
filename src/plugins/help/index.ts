@@ -1,4 +1,5 @@
 import type { Plugin, PluginContext } from '../../core/plugin-system/types';
+import { standardActions } from '../../core/actions';
 import helpCommand from './help';
 
 export const helpPlugin: Plugin = {
@@ -7,6 +8,7 @@ export const helpPlugin: Plugin = {
   version: '0.1.0',
   description: 'Built-in documentation and help system',
   commands: [helpCommand],
+  actions: standardActions,
   async activate(ctx: PluginContext) {
     for (const cmd of this.commands!) {
       ctx.commands.register(cmd);

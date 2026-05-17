@@ -1,4 +1,5 @@
 import type { Plugin, PluginContext, CommandExecutedPayload } from '../../core/plugin-system/types';
+import { standardActions } from '../../core/actions';
 import openCommand from './open';
 import copyCommand from './copy';
 import moveCommand from './move';
@@ -10,6 +11,7 @@ export const fsPlugin: Plugin = {
   version: '0.1.0',
   description: 'File and directory operations (open, copy, move, delete)',
   commands: [openCommand, copyCommand, moveCommand, deleteCommand],
+  actions: standardActions,
   docs: {
     overview: 'The Filesystem plugin provides basic file and directory operations. All operations go through the server REST API and are validated against path traversal attacks.',
     examples: '  /open package.json\n  /copy file.ts file.backup.ts\n  /move old.ts new.ts\n  /delete -f temp.log',

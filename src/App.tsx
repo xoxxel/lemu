@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { parse, isSlashCommand, isShellCommand } from './core/parser';
+import { parse } from './core/parser';
 import { getRuntime } from './core/runtime/instance';
 import { useCommandHistory } from './hooks/useCommandHistory';
 import { useAutocomplete } from './hooks/useAutocomplete';
@@ -120,6 +120,48 @@ export default function App() {
     terminal.sendInput(trimmed, sid);
   }, [terminal, addMessage]);
 
+  const handleTerminalCommand = useCallback((args: string[]) => {
+    const sub = args[0];
+    if (!sub || sub === 'list') {
+      const list = terminal.sessions.map((s) =>
+        `  [${s.id === terminal.activeSessionId ? '*' : ' '}] ${s.label || s.shellType} (${s.id.slice(0, 8)}...) cwd: ${s.cwd}`
+      ).join('\n');
+      addMessage('system', `Terminal sessions:\n${list || '  No sessions'}`);
+    } else if (sub === 'new' || sub === 'create') {
+      terminal.createSession();
+      setTerminalPanelOpen(true);
+      addMessage('system', 'Creating new terminal session...');
+    } else if ((sub === 'close' || sub === 'rm') && args[1]) {
+      terminal.destroySession(args[1]);
+      addMessage('system', `Closed session: ${args[1]}`);
+    } else if (sub === 'switch' && args[1]) {
+      terminal.switchSession(args[1]);
+      addMessage('system', `Switched to session: ${args[1]}`);
+    } else {
+      addMessage('error', 'Usage: /terminal [list|new|close <id>|switch <id>]');
+    }
+  }, [terminal, addMessage]);
+
+  const activeTab = tabs.find((t) => t.id === activeTabId) || null;
+
+  const mainTabs = tabs;
+
+  const pinnedTabEntries = tabs
+    .filter((t) => pinnedTabs.has(t.id))
+    .map((t) => ({ id: t.id, title: t.title }));
+
+  const togglePinTab = useCallback((id: string) => {
+    setPinnedTabs((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handlePinnedTabClick = useCallback((id: string) => {
+    setActiveTabId(id);
+  }, []);
+
   const handleSubmit = useCallback(async (input: string) => {
     const trimmed = input.trim();
     if (!trimmed) return;
@@ -128,11 +170,61 @@ export default function App() {
     setInputValue('');
     clearAutocomplete();
 
+    // Plugin Action Mode: >action
+    if (trimmed.startsWith('>')) {
+      const actionId = trimmed.slice(1).trim();
+      if (!actionId) {
+        addMessage('user', trimmed);
+        const actions = activeTab
+          ? getRuntime().actionRegistry.getForType(activeTab.type)
+          : [];
+        let body: string;
+        if (actions.length === 0) {
+          body = activeTab
+            ? `  No actions for ${activeTab.type}`
+            : '  No active tab. Open a file or view first.';
+        } else {
+          body = actions.map(a => `  ${a.id}  ${a.title ?? ''}`).join('\n');
+        }
+        addMessage('system', `Available actions:\n${body}`);
+        return;
+      }
+      if (!activeTab) {
+        addMessage('user', trimmed);
+        addMessage('error', 'No active tab. Open a file or view first.');
+        return;
+      }
+      const runtime = getRuntime();
+      const action = runtime.actionRegistry.findByTypeAndId(activeTab.type, actionId);
+      if (!action) {
+        addMessage('user', trimmed);
+        addMessage('error', `No action '${actionId}' for ${activeTab.type}. Type > to list available actions.`);
+        return;
+      }
+      addMessage('user', trimmed);
+      const ctx = {
+        tabId: activeTab.id,
+        tabType: activeTab.type,
+        tabState: activeTab.state ?? {},
+        pinned: pinnedTabs.has(activeTab.id),
+        pin: () => togglePinTab(activeTab.id),
+        unpin: () => togglePinTab(activeTab.id),
+      };
+      try {
+        const result = await action.handler(ctx);
+        addMessage('system', result);
+      } catch (err) {
+        addMessage('error', `Action error: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      return;
+    }
+
+    // Help Mode: @topic
     if (trimmed.startsWith('@')) {
       addMessage('user', trimmed);
       const topic = trimmed.slice(1).trim();
       if (!topic) {
-        addMessage('system', 'Usage: @<plugin|command> — e.g. @open, @search, @git');
+        addMessage('system', 'Usage: @<plugin|command> \u2014 e.g. @open, @search, @git');
         return;
       }
       const result = await getRuntime().execute({ name: 'help', args: [topic], raw: trimmed });
@@ -147,7 +239,8 @@ export default function App() {
       return;
     }
 
-    if (isSlashCommand(trimmed)) {
+    // Command Mode: /cmd or !cmd (rewritten to /run cmd)
+    if (trimmed.startsWith('/') || trimmed.startsWith('!')) {
       const parsed = parse(trimmed);
       addMessage('user', trimmed);
       if (!parsed) {
@@ -186,35 +279,12 @@ export default function App() {
           });
         }
       }
-    } else if (isShellCommand(trimmed)) {
-      await handleShellCommand(trimmed);
-    } else {
-      addMessage('user', trimmed);
-      addMessage('error', 'Not a valid command. Type / for available commands.');
+      return;
     }
-  }, [addHistory, addMessage, clearAutocomplete, terminal, handleShellCommand, addTab]);
 
-  const handleTerminalCommand = useCallback((args: string[]) => {
-    const sub = args[0];
-    if (!sub || sub === 'list') {
-      const list = terminal.sessions.map((s) =>
-        `  [${s.id === terminal.activeSessionId ? '*' : ' '}] ${s.label || s.shellType} (${s.id.slice(0, 8)}...) cwd: ${s.cwd}`
-      ).join('\n');
-      addMessage('system', `Terminal sessions:\n${list || '  No sessions'}`);
-    } else if (sub === 'new' || sub === 'create') {
-      terminal.createSession();
-      setTerminalPanelOpen(true);
-      addMessage('system', 'Creating new terminal session...');
-    } else if ((sub === 'close' || sub === 'rm') && args[1]) {
-      terminal.destroySession(args[1]);
-      addMessage('system', `Closed session: ${args[1]}`);
-    } else if (sub === 'switch' && args[1]) {
-      terminal.switchSession(args[1]);
-      addMessage('system', `Switched to session: ${args[1]}`);
-    } else {
-      addMessage('error', 'Usage: /terminal [list|new|close <id>|switch <id>]');
-    }
-  }, [terminal, addMessage]);
+    // Terminal Mode (default): plain text -> shell
+    await handleShellCommand(trimmed);
+  }, [addHistory, addMessage, clearAutocomplete, terminal, handleShellCommand, addTab, activeTab, pinnedTabs, togglePinTab, handleTerminalCommand]);
 
   const handleInputChange = useCallback((value: string) => {
     setInputValue(value);
@@ -283,26 +353,6 @@ export default function App() {
     }
   }, [inputValue, suggestions, selectCurrent, selectNext, selectPrev, clearAutocomplete, handleSubmit, historyUp, historyDown, resetHistory]);
 
-  const mainTabs = tabs;
-  const activeTab = tabs.find((t) => t.id === activeTabId) || null;
-
-  const togglePinTab = useCallback((id: string) => {
-    setPinnedTabs((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const pinnedTabTitles = pinnedTabs.size > 0
-    ? tabs.filter((t) => pinnedTabs.has(t.id)).map((t) => t.title)
-    : [];
-
-  const handlePinnedTabClick = useCallback((title: string) => {
-    const tab = tabs.find((t) => t.title === title);
-    if (tab) setActiveTabId(tab.id);
-  }, [tabs]);
-
   const handleTerminalToggle = useCallback(() => {
     setTerminalPanelOpen((prev) => !prev);
   }, []);
@@ -314,7 +364,7 @@ export default function App() {
     }}>
       <Sidebar
         cwd={cwd}
-        pinnedTabs={pinnedTabTitles}
+        pinnedTabs={pinnedTabEntries}
         onPinnedTabClick={handlePinnedTabClick}
       />
       <div className="main">
@@ -322,10 +372,8 @@ export default function App() {
           <MainTabBar
             tabs={mainTabs}
             activeTabId={activeTabId}
-            pinnedTabs={pinnedTabs}
             onSelect={selectTab}
             onClose={closeTab}
-            onTogglePin={togglePinTab}
           />
         )}
         <Workspace

@@ -1,4 +1,5 @@
 import type { Command } from '../commands/types';
+import type { PluginAction } from '../actions/types';
 
 export interface CommandExecutedPayload {
   command: string;
@@ -29,6 +30,7 @@ export interface Plugin {
   activate(ctx: PluginContext): Promise<void>;
   deactivate?(ctx: PluginContext): Promise<void>;
   commands?: Command[];
+  actions?: PluginAction[];
   onConfig?(config: Record<string, unknown>): Promise<Record<string, unknown>>;
   onReady?(ctx: PluginContext): Promise<void>;
   onCommandExecuted?(payload: CommandExecutedPayload): Promise<void>;
@@ -83,4 +85,7 @@ export interface PluginContext {
   storage: StorageService;
   ui: UIService;
   config: Record<string, unknown>;
+  actions: {
+    register(type: string, action: import('../actions/types').PluginAction): void;
+  };
 }

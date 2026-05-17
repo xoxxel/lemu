@@ -26,7 +26,7 @@ export function parse(input: string): ParsedCommand | null {
 }
 
 export function isCommandInput(input: string): boolean {
-  return input.startsWith('/') || input.startsWith('!') || input.startsWith('@');
+  return input.startsWith('/') || input.startsWith('!') || input.startsWith('@') || input.startsWith('>');
 }
 
 export function isSlashCommand(input: string): boolean {

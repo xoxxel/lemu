@@ -1,6 +1,11 @@
+interface PinnedEntry {
+  id: string;
+  title: string;
+}
+
 interface SidebarProps {
   cwd: string;
-  pinnedTabs: string[];
+  pinnedTabs: PinnedEntry[];
   onPinnedTabClick: (id: string) => void;
 }
 
@@ -17,14 +22,14 @@ export default function Sidebar({ cwd, pinnedTabs, onPinnedTabClick }: SidebarPr
       {pinnedTabs.length > 0 && (
         <div className="sidebar-section">
           <div className="sidebar-section-title">Pinned</div>
-          {pinnedTabs.map((title) => (
+          {pinnedTabs.map((entry) => (
             <div
-              key={title}
+              key={entry.id}
               className="sidebar-item"
-              onClick={() => onPinnedTabClick(title)}
+              onClick={() => onPinnedTabClick(entry.id)}
             >
               <span className="icon">{'\u25CB'}</span>
-              <span className="sidebar-item-label">{title}</span>
+              <span className="sidebar-item-label">{entry.title}</span>
             </div>
           ))}
         </div>

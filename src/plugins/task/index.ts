@@ -1,4 +1,5 @@
 import type { Plugin, PluginContext } from '../../core/plugin-system/types';
+import { standardActions } from '../../core/actions';
 import taskCommand from './task';
 
 export const taskPlugin: Plugin = {
@@ -7,6 +8,7 @@ export const taskPlugin: Plugin = {
   version: '0.1.0',
   description: 'Manage tasks (list, add, complete, remove)',
   commands: [taskCommand],
+  actions: standardActions,
   docs: {
     overview: 'An in-memory task manager for tracking work items during a development session. Supports adding, listing, completing, and removing tasks.',
     examples: '  /task add Fix login bug\n  /task list\n  /task done 1712345678901\n  /task remove 1712345678901\n  /todo add Write tests',

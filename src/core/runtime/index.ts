@@ -2,7 +2,9 @@ import { registry } from '../commands/registry';
 import { PluginRegistry, PluginLoader, type PluginContext, type AppRenderContext, type CommandExecutedPayload } from '../plugin-system';
 import { eventBus } from '../events/event-bus';
 import { executor } from '../executor';
+import { ActionRegistry } from '../actions';
 import type { Command, ParsedCommand, CommandResult } from '../commands/types';
+import type { PluginAction } from '../actions/types';
 
 const appWrappers: unknown[] = [];
 
@@ -10,7 +12,7 @@ export function getAppWrappers(): unknown[] {
   return appWrappers;
 }
 
-function createPluginContext(): PluginContext {
+function createPluginContext(actionRegistry: ActionRegistry): PluginContext {
   return {
     commands: {
       register: (cmd: Command) => registry.register(cmd),
@@ -45,6 +47,9 @@ function createPluginContext(): PluginContext {
       },
     },
     config: {},
+    actions: {
+      register: (type: string, action: PluginAction) => actionRegistry.register(type, action),
+    },
   };
 }
 
@@ -52,6 +57,7 @@ export interface Runtime {
   pluginRegistry: PluginRegistry;
   pluginLoader: PluginLoader;
   pluginContext: PluginContext;
+  actionRegistry: ActionRegistry;
   execute(parsed: ParsedCommand): Promise<CommandResult>;
   getAutocomplete(parsed: ParsedCommand): ReturnType<typeof executor.getAutocomplete>;
   init(plugins: import('../plugin-system/types').Plugin[]): Promise<void>;
@@ -60,8 +66,9 @@ export interface Runtime {
 
 export async function createRuntime(): Promise<Runtime> {
   console.log('[RUNTIME] createRuntime()');
+  const actionRegistry = new ActionRegistry();
   const pluginRegistry = new PluginRegistry();
-  const pluginContext = createPluginContext();
+  const pluginContext = createPluginContext(actionRegistry);
   const pluginLoader = new PluginLoader(pluginRegistry, pluginContext);
 
   const activePlugins = () => pluginRegistry.getActive();
@@ -70,6 +77,7 @@ export async function createRuntime(): Promise<Runtime> {
     pluginRegistry,
     pluginLoader,
     pluginContext,
+    actionRegistry,
 
     async execute(parsed: ParsedCommand): Promise<CommandResult> {
       console.log('[RUNTIME] execute() called: name=%s args=%j type=%s', parsed.name, parsed.args, 'command');

@@ -68,6 +68,14 @@ export class PluginLoader {
       console.log('[PLUGIN_LOADER] No commands in plugin.commands for %s', plugin.id);
     }
 
+    if (plugin.actions) {
+      console.log('[PLUGIN_LOADER] Registering %d actions for %s', plugin.actions.length, plugin.id);
+      for (const action of plugin.actions) {
+        const type = action.type || '*';
+        this.ctx.actions.register(type, action);
+      }
+    }
+
     console.log('[PLUGIN_LOADER] Calling activate for %s', plugin.id);
     await plugin.activate(this.ctx);
     console.log('[PLUGIN_LOADER] activate complete for %s', plugin.id);

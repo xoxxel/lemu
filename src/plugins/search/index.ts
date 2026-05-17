@@ -1,4 +1,5 @@
 import type { Plugin, PluginContext } from '../../core/plugin-system/types';
+import { standardActions } from '../../core/actions';
 import searchCommand from './search';
 
 export const searchPlugin: Plugin = {
@@ -7,6 +8,7 @@ export const searchPlugin: Plugin = {
   version: '0.1.0',
   description: 'Search file contents for patterns',
   commands: [searchCommand],
+  actions: standardActions,
   docs: {
     overview: 'Search file contents for literal text patterns across the workspace. The server walks the directory tree and matches lines using substring inclusion.',
     examples: '  /search function\n  /search TODO src/components\n  /grep import',
