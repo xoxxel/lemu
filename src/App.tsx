@@ -20,10 +20,14 @@ function applyAutocomplete(input: string, selected: string): string {
   if (parsed && parsed.args.length > 0) {
     const cmdPrefix = '/' + parsed.name + ' ';
     const preceding = parsed.args.slice(0, -1);
+    const lastArg = parsed.args[parsed.args.length - 1];
+    const dirIndex = lastArg.lastIndexOf('/');
+    const dirPrefix = dirIndex >= 0 ? lastArg.slice(0, dirIndex + 1) : '';
+    const newArg = dirPrefix + selected;
     if (preceding.length > 0) {
-      return cmdPrefix + preceding.join(' ') + ' ' + selected + ' ';
+      return cmdPrefix + preceding.join(' ') + ' ' + newArg + ' ';
     }
-    return cmdPrefix + selected + ' ';
+    return cmdPrefix + newArg + ' ';
   }
   return selected + ' ';
 }
@@ -187,8 +191,10 @@ export default function App() {
     }
 
     if (isSlashCommand(trimmed)) {
-      addMessage('user', trimmed);
       const parsed = parse(trimmed);
+      console.log('[SUBMIT] RAW INPUT=%s', trimmed);
+      console.log('[SUBMIT] PARSED name=%s args=%j', parsed?.name, parsed?.args);
+      addMessage('user', trimmed);
       if (!parsed) {
         addMessage('error', 'Invalid command syntax.');
         return;

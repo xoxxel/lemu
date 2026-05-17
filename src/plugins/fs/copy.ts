@@ -48,8 +48,10 @@ const copyCommand: Command = {
   async autocomplete(args) {
     if (args.length === 0) return api.listFiles();
     if (args.length === 1) {
-      const prefix = args[0];
-      const items = await api.listFiles();
+      const raw = args[0];
+      const dir = raw.includes('/') ? raw.split('/').slice(0, -1).join('/') || '.' : '.';
+      const prefix = raw.split('/').pop() || '';
+      const items = await api.listFiles(dir);
       return items.filter((i) => i.value.startsWith(prefix));
     }
     return [];
