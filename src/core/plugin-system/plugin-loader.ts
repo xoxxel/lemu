@@ -12,6 +12,18 @@ export class PluginRegistry {
     console.log('[PLUGIN_REGISTRY] Registered plugin: %s (%s)', plugin.id, plugin.name);
   }
 
+  activate(id: string): void {
+    console.log('[PLUGIN_REGISTRY] Activating plugin: %s', id);
+    this.active.add(id);
+    console.log('[PLUGIN_REGISTRY] Active set size: %d', this.active.size);
+  }
+
+  deactivate(id: string): void {
+    console.log('[PLUGIN_REGISTRY] Deactivating plugin: %s', id);
+    this.active.delete(id);
+    console.log('[PLUGIN_REGISTRY] Active set size: %d', this.active.size);
+  }
+
   get(id: string): Plugin | undefined {
     return this.plugins.get(id);
   }
@@ -60,6 +72,9 @@ export class PluginLoader {
     await plugin.activate(this.ctx);
     console.log('[PLUGIN_LOADER] activate complete for %s', plugin.id);
 
+    console.log('[PLUGIN_LOADER] Marking plugin as active in registry: %s', plugin.id);
+    this.registry.activate(plugin.id);
+
     this.ctx.events.emit('plugin:activated', { id: plugin.id, name: plugin.name });
     console.log('[PLUGIN_LOADER] Plugin loaded successfully: %s', plugin.id);
   }
@@ -78,6 +93,7 @@ export class PluginLoader {
       await plugin.deactivate(this.ctx);
     }
 
+    this.registry.deactivate(pluginId);
     this.ctx.events.emit('plugin:deactivated', { id: pluginId });
   }
 

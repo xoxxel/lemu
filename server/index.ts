@@ -112,7 +112,24 @@ app.post('/api/fs/delete', async (req, res) => {
   }
 });
 
-// Search file contents
+// Search file contents (cross-platform — pure Node.js, no grep dependency)
+const SEARCH_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.json', '.md', '.css', '.html']);
+
+async function walkDir(dirPath: string): Promise<string[]> {
+  const files: string[] = [];
+  const entries = await fs.readdir(dirPath, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+    if (entry.isDirectory()) {
+      files.push(...await walkDir(fullPath));
+    } else if (SEARCH_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
+      files.push(fullPath);
+    }
+  }
+  return files;
+}
+
 app.get('/api/fs/search', async (req, res) => {
   try {
     const pattern = req.query.pattern as string;
@@ -129,21 +146,23 @@ app.get('/api/fs/search', async (req, res) => {
     }
 
     const results: Array<{ file: string; line: number; content: string }> = [];
-    const grep = execSync(
-      `grep -rn "${pattern.replace(/"/g, '\\"')}" --include="*.{ts,tsx,js,jsx,json,md,css,html}" "${target}" 2>/dev/null || true`,
-      { encoding: 'utf-8', maxBuffer: 1024 * 1024 }
-    );
+    const files = await walkDir(target);
 
-    if (grep.trim()) {
-      for (const line of grep.trim().split('\n')) {
-        const match = line.match(/^(.+?):(\d+):(.*)$/);
-        if (match) {
-          results.push({
-            file: path.relative(WORKSPACE, match[1]),
-            line: parseInt(match[2], 10),
-            content: match[3].trim(),
-          });
+    for (const filePath of files) {
+      try {
+        const content = await fs.readFile(filePath, 'utf-8');
+        const lines = content.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].includes(pattern)) {
+            results.push({
+              file: path.relative(WORKSPACE, filePath),
+              line: i + 1,
+              content: lines[i].trim(),
+            });
+          }
         }
+      } catch {
+        // skip unreadable files
       }
     }
 

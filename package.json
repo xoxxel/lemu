@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "concurrently \"npm run dev:client\" \"npm run dev:server\"",
     "dev:client": "vite",
-    "dev:server": "tsx watch server/index.ts",
+    "dev:server": "nodemon --exec tsx server/index.ts --ext ts,js --watch server",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },
@@ -32,6 +32,7 @@
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "fs-extra": "^11.2.0",
+    "nodemon": "^3.1.14",
     "tsx": "^4.16.2",
     "typescript": "^5.5.3",
     "vite": "^5.4.0"

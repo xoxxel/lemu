@@ -11,39 +11,67 @@ interface WorkspaceProps {
   renderTerminalPane?: (sessionId: string, nodeId: string) => React.ReactNode;
 }
 
+function renderMessage(msg: Message) {
+  if (msg.type === 'terminal') {
+    const data = msg.data as Record<string, unknown> | undefined;
+    return (
+      <div key={msg.id} className="message-block user">
+        <span className="prefix">{'>'}</span>
+        <span className="body">{msg.content}</span>
+        {data?.type === 'terminal' && (
+          <TerminalBlock
+            data={(data.output as string[]) || []}
+            command={data.command as string}
+            isRunning={data.isRunning as boolean}
+          />
+        )}
+      </div>
+    );
+  }
+  return (
+    <div key={msg.id} className={`message-block ${msg.type}`}>
+      <span className="prefix">{msg.type === 'user' ? '>' : msg.type === 'error' ? '!' : '\u2713'}</span>
+      <span className="body">{msg.content}</span>
+      {renderDataBlock(msg.data)}
+    </div>
+  );
+}
+
+function renderTerminals(splitNodes: SplitNode[], renderTerminalPane: (sessionId: string, nodeId: string) => React.ReactNode) {
+  if (splitNodes.length === 1) {
+    return (
+      <div className="workspace-terminal-full" key="terminals">
+        <SplitPane
+          node={splitNodes[0]}
+          onSplit={() => {}}
+          onClose={() => {}}
+          renderTerminal={renderTerminalPane}
+        />
+      </div>
+    );
+  }
+  return (
+    <div className="workspace-split-container" key="terminals">
+      {splitNodes.map((node) => (
+        <div key={node.id} className="workspace-split-pane" style={{ flex: 1 }}>
+          <SplitPane
+            node={node}
+            onSplit={() => {}}
+            onClose={() => {}}
+            renderTerminal={renderTerminalPane}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const Workspace = forwardRef<HTMLDivElement, WorkspaceProps>(
   ({ messages, splitNodes, renderTerminalPane }: WorkspaceProps, ref) => {
-    if (splitNodes && splitNodes.length > 0 && renderTerminalPane) {
-      return (
-        <div className="workspace" ref={ref}>
-          {splitNodes.length === 1 ? (
-            <div className="workspace-terminal-full">
-              <SplitPane
-                node={splitNodes[0]}
-                onSplit={() => {}}
-                onClose={() => {}}
-                renderTerminal={renderTerminalPane}
-              />
-            </div>
-          ) : (
-            <div className="workspace-split-container">
-              {splitNodes.map((node) => (
-                <div key={node.id} className="workspace-split-pane" style={{ flex: 1 }}>
-                  <SplitPane
-                    node={node}
-                    onSplit={() => {}}
-                    onClose={() => {}}
-                    renderTerminal={renderTerminalPane}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
+    const hasTerminals = splitNodes && splitNodes.length > 0 && renderTerminalPane;
+    const hasMessages = messages.length > 0;
 
-    if (messages.length === 0) {
+    if (!hasTerminals && !hasMessages) {
       return (
         <div className="workspace" ref={ref}>
           <div className="welcome">
@@ -57,33 +85,23 @@ const Workspace = forwardRef<HTMLDivElement, WorkspaceProps>(
       );
     }
 
+    const children: React.ReactNode[] = [];
+
+    if (hasTerminals) {
+      children.push(renderTerminals(splitNodes!, renderTerminalPane!));
+    }
+
+    if (hasMessages) {
+      children.push(
+        <div className="workspace-messages" key="messages">
+          {messages.map(renderMessage)}
+        </div>
+      );
+    }
+
     return (
       <div className="workspace" ref={ref}>
-        {messages.map((msg) => {
-          if (msg.type === 'terminal') {
-            const data = msg.data as Record<string, unknown> | undefined;
-            return (
-              <div key={msg.id} className="message-block user">
-                <span className="prefix">{'>'}</span>
-                <span className="body">{msg.content}</span>
-                {data?.type === 'terminal' && (
-                  <TerminalBlock
-                    data={(data.output as string[]) || []}
-                    command={data.command as string}
-                    isRunning={data.isRunning as boolean}
-                  />
-                )}
-              </div>
-            );
-          }
-          return (
-            <div key={msg.id} className={`message-block ${msg.type}`}>
-              <span className="prefix">{msg.type === 'user' ? '>' : msg.type === 'error' ? '!' : '\u2713'}</span>
-              <span className="body">{msg.content}</span>
-              {renderDataBlock(msg.data)}
-            </div>
-          );
-        })}
+        {children}
       </div>
     );
   }

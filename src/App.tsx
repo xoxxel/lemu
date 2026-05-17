@@ -12,6 +12,20 @@ import TerminalOutput from './components/TerminalOutput';
 import { createLeafNode, type SplitNode } from './components/SplitPane';
 import './styles/app.css';
 
+function applyAutocomplete(input: string, selected: string): string {
+  const trimmed = input.trim();
+  const parsed = parse(trimmed);
+  if (parsed && parsed.args.length > 0) {
+    const cmdPrefix = '/' + parsed.name + ' ';
+    const preceding = parsed.args.slice(0, -1);
+    if (preceding.length > 0) {
+      return cmdPrefix + preceding.join(' ') + ' ' + selected + ' ';
+    }
+    return cmdPrefix + selected + ' ';
+  }
+  return selected + ' ';
+}
+
 export interface Message {
   id: string;
   type: 'user' | 'system' | 'error' | 'terminal';
@@ -264,7 +278,7 @@ export default function App() {
         e.preventDefault();
         const selected = selectCurrent();
         if (selected) {
-          setInputValue(selected + ' ');
+          setInputValue(applyAutocomplete(inputValue, selected));
           clearAutocomplete();
         }
         return;
@@ -362,7 +376,7 @@ export default function App() {
           onSuggestionClick={(idx) => {
             const selected = suggestions[idx];
             if (selected) {
-              setInputValue(selected.value + ' ');
+              setInputValue(applyAutocomplete(inputValue, selected.value));
               clearAutocomplete();
               inputRef.current?.focus();
             }
