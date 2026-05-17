@@ -44,7 +44,7 @@ const openCommand: Command = {
       return {
         success: true,
         message: `Opened ${path}`,
-        data: { path, content, type: 'file' },
+        data: { path, content, type: 'editor' },
       };
     } catch (err) {
       console.log('[CMD_OPEN] FAILED: %s', err instanceof Error ? err.message : String(err));

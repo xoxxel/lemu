@@ -1,48 +1,10 @@
-import { useState } from 'react';
-import type { SessionState } from '../hooks/useTerminal';
-
-interface SidebarCommand {
-  name: string;
-  description: string;
-  pluginName: string;
-  usage?: string;
-}
-
 interface SidebarProps {
   cwd: string;
-  recentFiles: string[];
-  openTabs: string[];
-  activeTab: string | null;
-  activeTasks: number;
-  terminalSessions: SessionState[];
-  activeTerminalSession: string | null;
-  onTabClick: (tab: string) => void;
-  onTerminalSessionClick: (id: string) => void;
-  onTerminalSessionClose: (id: string) => void;
-  onNewTerminalSession: () => void;
-  onCommandClick?: (command: string) => void;
-  commands?: SidebarCommand[];
-  processes?: Array<{ pid: number; command: string; sessionId: string }>;
+  pinnedTabs: string[];
+  onPinnedTabClick: (id: string) => void;
 }
 
-export default function Sidebar({
-  cwd,
-  recentFiles,
-  openTabs,
-  activeTab,
-  activeTasks,
-  terminalSessions,
-  activeTerminalSession,
-  onTabClick,
-  onTerminalSessionClick,
-  onTerminalSessionClose,
-  onNewTerminalSession,
-  onCommandClick,
-  commands,
-  processes,
-}: SidebarProps) {
-  const [helpOpen, setHelpOpen] = useState(false);
-
+export default function Sidebar({ cwd, pinnedTabs, onPinnedTabClick }: SidebarProps) {
   return (
     <aside className="sidebar">
       <div className="sidebar-header">lemu</div>
@@ -52,107 +14,21 @@ export default function Sidebar({
         {cwd}
       </div>
 
-      <div className="sidebar-section">
-        <div className="sidebar-section-title">
-          Terminals
-          <button className="sidebar-add-btn" onClick={onNewTerminalSession} title="New terminal">+</button>
-        </div>
-        {terminalSessions.length === 0 && (
-          <div className="sidebar-item dim">No active sessions</div>
-        )}
-        {terminalSessions.map((s) => (
-          <div
-            key={s.id}
-            className={`sidebar-item ${activeTerminalSession === s.id ? 'active' : ''}`}
-            onClick={() => onTerminalSessionClick(s.id)}
-          >
-            <span className="icon">{'\u25A3'}</span>
-            <span className="sidebar-item-label">{s.label || s.shellType || 'terminal'}</span>
-            <button
-              className="sidebar-item-close"
-              onClick={(e) => { e.stopPropagation(); onTerminalSessionClose(s.id); }}
-            >
-              &times;
-            </button>
-          </div>
-        ))}
-      </div>
-
-      {commands && commands.length > 0 && (
+      {pinnedTabs.length > 0 && (
         <div className="sidebar-section">
-          <div className="sidebar-section-title" onClick={() => setHelpOpen(!helpOpen)} style={{ cursor: 'pointer' }}>
-            {helpOpen ? '\u25BC' : '\u25B6'} Commands ({commands.length})
-          </div>
-          {helpOpen && (
-            <div className="sidebar-commands-list">
-              {commands.map((cmd) => (
-                <div
-                  key={cmd.name}
-                  className="sidebar-item sidebar-command-item"
-                  onClick={() => onCommandClick?.(cmd.name)}
-                  title={`/${cmd.name} — ${cmd.description}`}
-                >
-                  <span className="icon">{'/'}</span>
-                  <span className="sidebar-item-label">
-                    <span className="cmd-name">{cmd.name}</span>
-                    <span className="cmd-plugin">{cmd.pluginName}</span>
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="sidebar-section">
-        <div className="sidebar-section-title">Processes ({(processes || []).length})</div>
-        {(processes || []).length === 0 && (
-          <div className="sidebar-item dim">No background processes</div>
-        )}
-        {(processes || []).map((p, idx) => (
-          <div key={p.pid || idx} className="sidebar-item">
-            <span className="icon">{'\u25CF'}</span>
-            <span className="sidebar-item-label">{p.command}</span>
-            <span className="sidebar-item-meta">{p.pid}</span>
-          </div>
-        ))}
-      </div>
-
-      {openTabs.length > 0 && (
-        <div className="sidebar-section">
-          <div className="sidebar-section-title">Open Files</div>
-          {openTabs.map((tab) => (
+          <div className="sidebar-section-title">Pinned</div>
+          {pinnedTabs.map((title) => (
             <div
-              key={tab}
-              className={`sidebar-item ${activeTab === tab ? 'active' : ''}`}
-              onClick={() => onTabClick(tab)}
+              key={title}
+              className="sidebar-item"
+              onClick={() => onPinnedTabClick(title)}
             >
-              <span className="icon">{'\u25C9'}</span>
-              {tab}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {recentFiles.length > 0 && (
-        <div className="sidebar-section">
-          <div className="sidebar-section-title">Recent Files</div>
-          {recentFiles.map((file) => (
-            <div key={file} className="sidebar-item" onClick={() => onTabClick(file)}>
               <span className="icon">{'\u25CB'}</span>
-              {file}
+              <span className="sidebar-item-label">{title}</span>
             </div>
           ))}
         </div>
       )}
-
-      <div className="sidebar-section">
-        <div className="sidebar-section-title">Tasks</div>
-        <div className="sidebar-item">
-          <span className="icon">{'\u25A0'}</span>
-          {activeTasks} task{activeTasks !== 1 ? 's' : ''}
-        </div>
-      </div>
     </aside>
   );
 }

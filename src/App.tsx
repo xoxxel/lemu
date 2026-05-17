@@ -4,8 +4,9 @@ import { getRuntime } from './core/runtime/instance';
 import { useCommandHistory } from './hooks/useCommandHistory';
 import { useAutocomplete } from './hooks/useAutocomplete';
 import { useTerminal } from './hooks/useTerminal';
-import type { Tab, TabType } from './core/tabs/types';
-import { createTabId, TAB_ICONS } from './core/tabs/types';
+import type { Tab } from './core/tabs/types';
+import { createTabId } from './core/tabs/types';
+import { viewMeta } from './views';
 import Sidebar from './components/Sidebar';
 import Workspace from './components/Workspace';
 import InputBar from './components/InputBar';
@@ -48,6 +49,7 @@ export default function App() {
   const [activeTasks, setActiveTasks] = useState(0);
   const [inputValue, setInputValue] = useState('');
   const [terminalPanelOpen, setTerminalPanelOpen] = useState(false);
+  const [pinnedTabs, setPinnedTabs] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
 
@@ -66,13 +68,14 @@ export default function App() {
     return msg.id;
   }, []);
 
-  const addTab = useCallback((type: TabType, title: string, path?: string, state?: Record<string, unknown>) => {
+  const addTab = useCallback((type: string, title: string, path?: string, state?: Record<string, unknown>) => {
     const id = createTabId(type);
+    const meta = viewMeta[type];
     const tab: Tab = {
       id,
       type,
       title,
-      icon: TAB_ICONS[type],
+      icon: meta?.icon ?? '\u25A1',
       closable: true,
       path,
       state,
@@ -117,24 +120,6 @@ export default function App() {
     terminal.sendInput(trimmed, sid);
   }, [terminal, addMessage]);
 
-  function viewTypeToTabType(type: string): TabType | null {
-    switch (type) {
-      case 'file': return 'editor';
-      case 'browser': return 'browser';
-      case 'search': return 'search';
-      case 'task': return 'task';
-      case 'shell': return 'shell';
-      case 'text': return 'text';
-      default: return null;
-    }
-  }
-
-  function tabTitleFromResult(parsedName: string, data: Record<string, unknown>): string {
-    if (data.path) return data.path as string;
-    if (data.command) return data.command as string;
-    return parsedName;
-  }
-
   const handleSubmit = useCallback(async (input: string) => {
     const trimmed = input.trim();
     if (!trimmed) return;
@@ -155,9 +140,8 @@ export default function App() {
       if (result.success && result.data && typeof result.data === 'object') {
         const d = result.data as Record<string, unknown>;
         const dType = d.type as string | undefined;
-        const tabType = dType ? viewTypeToTabType(dType) : null;
-        if (tabType) {
-          addTab(tabType, `help: ${topic}`, undefined, d);
+        if (dType && viewMeta[dType]) {
+          addTab(dType, `help: ${topic}`, undefined, d);
         }
       }
       return;
@@ -189,10 +173,9 @@ export default function App() {
       if (result.success && result.data && typeof result.data === 'object') {
         const d = result.data as Record<string, unknown>;
         const dType = d.type as string | undefined;
-        const tabType = dType ? viewTypeToTabType(dType) : null;
-
-        if (tabType) {
-          addTab(tabType, tabTitleFromResult(parsed.name, d), d.path as string | undefined, d);
+        if (dType && viewMeta[dType]) {
+          const title = (d.path as string) || (d.command as string) || parsed.name;
+          addTab(dType, title, d.path as string | undefined, d);
         }
 
         const path = d.path as string | undefined;
@@ -300,23 +283,25 @@ export default function App() {
     }
   }, [inputValue, suggestions, selectCurrent, selectNext, selectPrev, clearAutocomplete, handleSubmit, historyUp, historyDown, resetHistory]);
 
-  const allCommands = (() => {
-    try {
-      return getRuntime().pluginRegistry.getAll().flatMap((p) =>
-        (p.commands || []).map((cmd) => ({
-          name: cmd.name,
-          description: cmd.description,
-          pluginName: p.name,
-          usage: cmd.usage,
-        }))
-      );
-    } catch {
-      return [];
-    }
-  })();
-
   const mainTabs = tabs;
   const activeTab = tabs.find((t) => t.id === activeTabId) || null;
+
+  const togglePinTab = useCallback((id: string) => {
+    setPinnedTabs((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const pinnedTabTitles = pinnedTabs.size > 0
+    ? tabs.filter((t) => pinnedTabs.has(t.id)).map((t) => t.title)
+    : [];
+
+  const handlePinnedTabClick = useCallback((title: string) => {
+    const tab = tabs.find((t) => t.title === title);
+    if (tab) setActiveTabId(tab.id);
+  }, [tabs]);
 
   const handleTerminalToggle = useCallback(() => {
     setTerminalPanelOpen((prev) => !prev);
@@ -329,35 +314,18 @@ export default function App() {
     }}>
       <Sidebar
         cwd={cwd}
-        recentFiles={recentFiles}
-        openTabs={tabs.map((t) => t.path).filter(Boolean) as string[]}
-        activeTab={activeTab?.path || null}
-        activeTasks={activeTasks}
-        terminalSessions={terminal.sessions}
-        activeTerminalSession={terminal.activeSessionId}
-        onTabClick={(path) => {
-          const tab = tabs.find((t) => t.path === path);
-          if (tab) setActiveTabId(tab.id);
-        }}
-        onTerminalSessionClick={(id) => terminal.switchSession(id)}
-        onTerminalSessionClose={(id) => terminal.destroySession(id)}
-        onNewTerminalSession={() => {
-          terminal.createSession();
-          setTerminalPanelOpen(true);
-        }}
-        commands={allCommands}
-        onCommandClick={(cmd) => {
-          setInputValue('/' + cmd + ' ');
-          inputRef.current?.focus();
-        }}
+        pinnedTabs={pinnedTabTitles}
+        onPinnedTabClick={handlePinnedTabClick}
       />
       <div className="main">
         {mainTabs.length > 0 && (
           <MainTabBar
             tabs={mainTabs}
             activeTabId={activeTabId}
+            pinnedTabs={pinnedTabs}
             onSelect={selectTab}
             onClose={closeTab}
+            onTogglePin={togglePinTab}
           />
         )}
         <Workspace
