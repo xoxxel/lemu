@@ -1,4 +1,4 @@
-export type TabType = 'editor' | 'terminal' | 'preview' | 'task' | 'ai';
+export type TabType = 'home' | 'editor' | 'terminal' | 'browser' | 'search' | 'task' | 'shell' | 'ai' | 'agent';
 
 export interface Tab {
   id: string;
@@ -20,12 +20,28 @@ export function createTabId(type: TabType): string {
 }
 
 export const TAB_ICONS: Record<TabType, string> = {
+  home: '\u2302',
   editor: '\u270E',
   terminal: '\u25A3',
-  preview: '\u25C9',
+  browser: '\u25C9',
+  search: '\u2315',
   task: '\u25A0',
+  shell: '\u276F',
   ai: '\u2728',
+  agent: '\u2699',
 };
+
+export const HOME_TAB_ID = 'home-main';
+
+export function createHomeTab(): Tab {
+  return {
+    id: HOME_TAB_ID,
+    type: 'home',
+    title: 'Home',
+    icon: TAB_ICONS.home,
+    closable: false,
+  };
+}
 
 export function friendlyTerminalName(index: number): string {
   const names = ['Terminal #1', 'Terminal #2', 'Terminal #3', 'Dev Server', 'Git Console'];

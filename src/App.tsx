@@ -3,9 +3,9 @@ import { parse, isSlashCommand, isShellCommand } from './core/parser';
 import { getRuntime } from './core/runtime/instance';
 import { useCommandHistory } from './hooks/useCommandHistory';
 import { useAutocomplete } from './hooks/useAutocomplete';
-import { useTerminal, type SessionState, type WSMessage } from './hooks/useTerminal';
+import { useTerminal } from './hooks/useTerminal';
 import type { Tab, TabType } from './core/tabs/types';
-import { createTabId, TAB_ICONS, friendlyTerminalName } from './core/tabs/types';
+import { createTabId, TAB_ICONS, createHomeTab, HOME_TAB_ID } from './core/tabs/types';
 import Sidebar from './components/Sidebar';
 import Workspace from './components/Workspace';
 import InputBar from './components/InputBar';
@@ -34,45 +34,36 @@ function applyAutocomplete(input: string, selected: string): string {
 
 export interface Message {
   id: string;
-  type: 'user' | 'system' | 'error' | 'terminal';
+  type: 'user' | 'system' | 'error';
   content: string;
-  data?: unknown;
-  terminalOutput?: string[];
-  terminalRunning?: boolean;
   timestamp: number;
 }
 
 export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [cwd, setCwd] = useState('~');
-  const [tabs, setTabs] = useState<Tab[]>([]);
-  const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [tabs, setTabs] = useState<Tab[]>([createHomeTab()]);
+  const [activeTabId, setActiveTabId] = useState<string>(HOME_TAB_ID);
   const [recentFiles, setRecentFiles] = useState<string[]>([]);
   const [activeTasks, setActiveTasks] = useState(0);
   const [inputValue, setInputValue] = useState('');
   const [terminalPanelOpen, setTerminalPanelOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
-  const terminalMsgId = useRef<string | null>(null);
 
   const { add: addHistory, up: historyUp, down: historyDown, reset: resetHistory, isNavigating } = useCommandHistory();
   const { suggestions, selectedIndex, update: updateAutocomplete, clear: clearAutocomplete, selectNext, selectPrev, selectCurrent } = useAutocomplete();
   const terminal = useTerminal();
 
-  const addMessage = useCallback((type: Message['type'], content: string, data?: unknown) => {
+  const addMessage = useCallback((type: Message['type'], content: string) => {
     const msg: Message = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       type,
       content,
-      data,
       timestamp: Date.now(),
     };
     setMessages((prev) => [...prev, msg]);
     return msg.id;
-  }, []);
-
-  const updateMessage = useCallback((id: string, updates: Partial<Message>) => {
-    setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...updates } : m)));
   }, []);
 
   const addTab = useCallback((type: TabType, title: string, path?: string, state?: Record<string, unknown>) => {
@@ -82,24 +73,30 @@ export default function App() {
       type,
       title,
       icon: TAB_ICONS[type],
-      closable: true,
+      closable: type !== 'home',
       path,
       state,
     };
-    setTabs((prev) => [...prev, tab]);
+    setTabs((prev) => {
+      if (prev.some((t) => t.id === id)) return prev;
+      return [...prev, tab];
+    });
     setActiveTabId(id);
     return id;
   }, []);
 
   const closeTab = useCallback((id: string) => {
+    if (id === HOME_TAB_ID) return;
     setTabs((prev) => {
       const idx = prev.findIndex((t) => t.id === id);
       const next = prev.filter((t) => t.id !== id);
-      if (activeTabId === id && next.length > 0) {
-        const newIdx = Math.min(idx, next.length - 1);
-        setActiveTabId(next[newIdx].id);
-      } else if (next.length === 0) {
-        setActiveTabId(null);
+      if (activeTabId === id) {
+        if (next.length > 0) {
+          const newIdx = Math.min(idx, next.length - 1);
+          setActiveTabId(next[newIdx].id);
+        } else {
+          setActiveTabId(HOME_TAB_ID);
+        }
       }
       return next;
     });
@@ -110,35 +107,9 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (workspaceRef.current) {
-      workspaceRef.current.scrollTop = workspaceRef.current.scrollHeight;
-    }
-  }, [messages]);
-
-  useEffect(() => {
     const s = terminal.sessions.find((s) => s.id === terminal.activeSessionId);
     if (s) setCwd(s.cwd);
   }, [terminal.sessions, terminal.activeSessionId]);
-
-  useEffect(() => {
-    const unsub = terminal.onMessage((msg: WSMessage) => {
-      if (msg.type === 'output' && terminalMsgId.current) {
-        setMessages((prev) =>
-          prev.map((m) => {
-            if (m.id === terminalMsgId.current && m.type === 'terminal') {
-              const newOutput = [...(m.terminalOutput || []), msg.data as string];
-              return {
-                ...m,
-                terminalOutput: newOutput,
-              };
-            }
-            return m;
-          })
-        );
-      }
-    });
-    return unsub;
-  }, [terminal]);
 
   const handleShellCommand = useCallback(async (trimmed: string) => {
     const sid = await terminal.ensureSession();
@@ -148,27 +119,26 @@ export default function App() {
     }
 
     setTerminalPanelOpen(true);
-
-    const userMsgId = addMessage('user', trimmed);
-
-    const termData = {
-      type: 'terminal' as const,
-      sessionId: sid,
-      output: [] as string[],
-      isRunning: true,
-      command: trimmed,
-    };
-
-    updateMessage(userMsgId, {
-      type: 'terminal',
-      terminalOutput: [],
-      terminalRunning: true,
-      data: termData,
-    });
-    terminalMsgId.current = userMsgId;
-
+    addMessage('user', trimmed);
     terminal.sendInput(trimmed, sid);
-  }, [terminal, addMessage, updateMessage]);
+  }, [terminal, addMessage]);
+
+  function viewTypeToTabType(type: string): TabType | null {
+    switch (type) {
+      case 'file': return 'editor';
+      case 'browser': return 'browser';
+      case 'search': return 'search';
+      case 'task': return 'task';
+      case 'shell': return 'shell';
+      default: return null;
+    }
+  }
+
+  function tabTitleFromResult(parsedName: string, data: Record<string, unknown>): string {
+    if (data.path) return data.path as string;
+    if (data.command) return data.command as string;
+    return parsedName;
+  }
 
   const handleSubmit = useCallback(async (input: string) => {
     const trimmed = input.trim();
@@ -192,8 +162,6 @@ export default function App() {
 
     if (isSlashCommand(trimmed)) {
       const parsed = parse(trimmed);
-      console.log('[SUBMIT] RAW INPUT=%s', trimmed);
-      console.log('[SUBMIT] PARSED name=%s args=%j', parsed?.name, parsed?.args);
       addMessage('user', trimmed);
       if (!parsed) {
         addMessage('error', 'Invalid command syntax.');
@@ -205,24 +173,6 @@ export default function App() {
         return;
       }
 
-      if (parsed.name === 'open' || parsed.name === 'edit') {
-        const path = parsed.args[0];
-        if (!path) {
-          addMessage('error', 'Usage: /open <path>');
-          return;
-        }
-        const result = await getRuntime().execute(parsed);
-        addMessage(result.success ? 'system' : 'error', result.message, result.data);
-        if (result.success && result.data && typeof result.data === 'object' && 'path' in result.data) {
-          addTab('editor', path, path, result.data as Record<string, unknown>);
-          setRecentFiles((prev) => {
-            const next = [path, ...prev.filter((f) => f !== path)].slice(0, 10);
-            return next;
-          });
-        }
-        return;
-      }
-
       let result;
       try {
         result = await getRuntime().execute(parsed);
@@ -230,14 +180,25 @@ export default function App() {
         addMessage('error', `Execution error: ${err instanceof Error ? err.message : String(err)}`);
         return;
       }
-      addMessage(result.success ? 'system' : 'error', result.message, result.data);
 
-      if (result.data && typeof result.data === 'object' && 'path' in result.data) {
-        const path = (result.data as Record<string, unknown>).path as string;
-        setRecentFiles((prev) => {
-          const next = [path, ...prev.filter((f) => f !== path)].slice(0, 10);
-          return next;
-        });
+      addMessage(result.success ? 'system' : 'error', result.message);
+
+      if (result.success && result.data && typeof result.data === 'object') {
+        const d = result.data as Record<string, unknown>;
+        const dType = d.type as string | undefined;
+        const tabType = dType ? viewTypeToTabType(dType) : null;
+
+        if (tabType) {
+          addTab(tabType, tabTitleFromResult(parsed.name, d), d.path as string | undefined, d);
+        }
+
+        const path = d.path as string | undefined;
+        if (path) {
+          setRecentFiles((prev) => {
+            const next = [path, ...prev.filter((f) => f !== path)].slice(0, 10);
+            return next;
+          });
+        }
       }
     } else if (isShellCommand(trimmed)) {
       await handleShellCommand(trimmed);
@@ -245,7 +206,7 @@ export default function App() {
       addMessage('user', trimmed);
       addMessage('error', 'Not a valid command. Type / for available commands.');
     }
-  }, [addHistory, addMessage, updateMessage, clearAutocomplete, terminal, handleShellCommand, addTab]);
+  }, [addHistory, addMessage, clearAutocomplete, terminal, handleShellCommand, addTab]);
 
   const handleTerminalCommand = useCallback((args: string[]) => {
     const sub = args[0];
