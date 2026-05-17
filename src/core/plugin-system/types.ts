@@ -31,6 +31,8 @@ export interface Plugin {
   deactivate?(ctx: PluginContext): Promise<void>;
   commands?: Command[];
   actions?: PluginAction[];
+  getActions?(): PluginAction[];
+  tabTypes?: string[];
   onConfig?(config: Record<string, unknown>): Promise<Record<string, unknown>>;
   onReady?(ctx: PluginContext): Promise<void>;
   onCommandExecuted?(payload: CommandExecutedPayload): Promise<void>;

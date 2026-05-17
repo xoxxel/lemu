@@ -54,7 +54,9 @@ export default function App() {
   const workspaceRef = useRef<HTMLDivElement>(null);
 
   const { add: addHistory, up: historyUp, down: historyDown, reset: resetHistory, isNavigating } = useCommandHistory();
-  const { suggestions, selectedIndex, update: updateAutocomplete, clear: clearAutocomplete, selectNext, selectPrev, selectCurrent } = useAutocomplete();
+  const activeTab = tabs.find((t) => t.id === activeTabId) || null;
+  const activeTabType = tabs.find((t) => t.id === activeTabId)?.type ?? null;
+  const { suggestions, selectedIndex, statusText, update: updateAutocomplete, clear: clearAutocomplete, selectNext, selectPrev, selectCurrent } = useAutocomplete(activeTabType);
   const terminal = useTerminal();
 
   const addMessage = useCallback((type: Message['type'], content: string) => {
@@ -142,8 +144,6 @@ export default function App() {
     }
   }, [terminal, addMessage]);
 
-  const activeTab = tabs.find((t) => t.id === activeTabId) || null;
-
   const mainTabs = tabs;
 
   const pinnedTabEntries = tabs
@@ -172,8 +172,8 @@ export default function App() {
 
     // Plugin Action Mode: >action
     if (trimmed.startsWith('>')) {
-      const actionId = trimmed.slice(1).trim();
-      if (!actionId) {
+      const actionQuery = trimmed.slice(1).trim();
+      if (!actionQuery) {
         addMessage('user', trimmed);
         const actions = activeTab
           ? getRuntime().actionRegistry.getForType(activeTab.type)
@@ -195,12 +195,19 @@ export default function App() {
         return;
       }
       const runtime = getRuntime();
-      const action = runtime.actionRegistry.findByTypeAndId(activeTab.type, actionId);
+      let action = runtime.actionRegistry.findByTypeAndId(activeTab.type, actionQuery);
+      if (!action) {
+        const allActions = runtime.actionRegistry.getForType(activeTab.type);
+        action = allActions.find(a =>
+          a.aliases?.some(al => al.toLowerCase() === actionQuery.toLowerCase())
+        );
+      }
       if (!action) {
         addMessage('user', trimmed);
-        addMessage('error', `No action '${actionId}' for ${activeTab.type}. Type > to list available actions.`);
+        addMessage('error', `No action '${actionQuery}' for ${activeTab.type}. Type > to list available actions.`);
         return;
       }
+      console.log('[ACTIONS] selected:', action.id);
       addMessage('user', trimmed);
       const ctx = {
         tabId: activeTab.id,
@@ -288,7 +295,7 @@ export default function App() {
 
   const handleInputChange = useCallback((value: string) => {
     setInputValue(value);
-    if (value.startsWith('/')) {
+    if (value.startsWith('/') || value.startsWith('>')) {
       updateAutocomplete(value);
     } else {
       clearAutocomplete();
@@ -411,6 +418,7 @@ export default function App() {
           onKeyDown={handleKeyDown}
           suggestions={suggestions}
           selectedIndex={selectedIndex}
+          hint={statusText}
           onSuggestionClick={(idx) => {
             const selected = suggestions[idx];
             if (selected) {

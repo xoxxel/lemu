@@ -9,6 +9,7 @@ export const browserPlugin: Plugin = {
   description: 'Preview HTML files in an embedded browser',
   commands: [browserCommand],
   actions: standardActions,
+  tabTypes: ['browser'],
   docs: {
     overview: 'Preview HTML files in an embedded iframe within the workspace. The file content is read via the server API and rendered with sandboxed scripts.',
     examples: '  /browser index.html\n  /browse dist/index.html\n  /preview build/report.html',

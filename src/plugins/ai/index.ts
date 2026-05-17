@@ -8,6 +8,7 @@ export const aiPlugin: Plugin = {
   version: '0.1.0',
   description: 'AI and agent commands',
   commands: [aiCommand, agentCommand],
+  tabTypes: ['ai', 'agent'],
   docs: {
     overview: 'AI-powered assistance including Q&A (/ai) and autonomous agent (/agent). Requires an API key from an OpenAI-compatible provider.',
     examples: '  /ai config apiKey=sk-...\n  /ai How does the parser work?\n  /agent fix the build errors\n  /ask What is this project?\n  /auto analyze the architecture',

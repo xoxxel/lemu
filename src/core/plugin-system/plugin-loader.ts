@@ -3,12 +3,19 @@ import type { Plugin, PluginContext } from './types';
 export class PluginRegistry {
   private plugins = new Map<string, Plugin>();
   private active = new Set<string>();
+  private tabTypeMap = new Map<string, string>();
 
   register(plugin: Plugin): void {
     if (this.plugins.has(plugin.id)) {
       throw new Error(`Plugin already registered: ${plugin.id}`);
     }
     this.plugins.set(plugin.id, plugin);
+    if (plugin.tabTypes) {
+      for (const tt of plugin.tabTypes) {
+        this.tabTypeMap.set(tt, plugin.id);
+        console.log('[PLUGIN_REGISTRY] Tab type %s -> plugin %s', tt, plugin.id);
+      }
+    }
     console.log('[PLUGIN_REGISTRY] Registered plugin: %s (%s)', plugin.id, plugin.name);
   }
 
@@ -38,6 +45,12 @@ export class PluginRegistry {
 
   getActive(): Plugin[] {
     return this.getAll().filter((p) => this.active.has(p.id));
+  }
+
+  getPluginByTabType(tabType: string): Plugin | null {
+    const pluginId = this.tabTypeMap.get(tabType);
+    if (!pluginId) return null;
+    return this.plugins.get(pluginId) ?? null;
   }
 }
 

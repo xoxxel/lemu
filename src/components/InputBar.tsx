@@ -8,10 +8,11 @@ interface InputBarProps {
   suggestions: AutocompleteItem[];
   selectedIndex: number;
   onSuggestionClick: (index: number) => void;
+  hint?: string | null;
 }
 
 const InputBar = forwardRef<HTMLInputElement, InputBarProps>(
-  ({ value, onChange, onKeyDown, suggestions, selectedIndex, onSuggestionClick }, ref) => {
+  ({ value, onChange, onKeyDown, suggestions, selectedIndex, onSuggestionClick, hint }, ref) => {
     return (
       <div className="input-bar-container">
         {suggestions.length > 0 && (
@@ -55,7 +56,7 @@ const InputBar = forwardRef<HTMLInputElement, InputBarProps>(
             autoFocus
           />
           {value && suggestions.length === 0 && (
-            <span className="hint">Enter to run</span>
+            <span className="hint">{hint ?? 'Enter to run'}</span>
           )}
         </div>
       </div>

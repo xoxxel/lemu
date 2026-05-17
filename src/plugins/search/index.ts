@@ -9,6 +9,7 @@ export const searchPlugin: Plugin = {
   description: 'Search file contents for patterns',
   commands: [searchCommand],
   actions: standardActions,
+  tabTypes: ['search'],
   docs: {
     overview: 'Search file contents for literal text patterns across the workspace. The server walks the directory tree and matches lines using substring inclusion.',
     examples: '  /search function\n  /search TODO src/components\n  /grep import',

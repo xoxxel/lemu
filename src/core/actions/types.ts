@@ -11,6 +11,7 @@ export interface PluginAction {
   id: string
   title?: string
   description?: string
+  aliases?: string[]
   /** Optional view-type restriction; '*' or omitted means all types */
   type?: string
   handler: (ctx: ActionContext) => string | Promise<string>

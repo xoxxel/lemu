@@ -3,17 +3,57 @@ import { parse } from '../core/parser';
 import { getRuntime } from '../core/runtime/instance';
 import { fuzzyMatch, sortByScore } from '../core/autocomplete';
 import { registry } from '../core/commands/registry';
+import { resolveActionsForTabType, matchAction } from '../plugins/actions';
 import type { AutocompleteItem } from '../core/commands/types';
 
-export function useAutocomplete() {
+export function useAutocomplete(activeTabType: string | null) {
   const [suggestions, setSuggestions] = useState<AutocompleteItem[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [statusText, setStatusText] = useState<string | null>(null);
 
   const update = useCallback(async (input: string) => {
-    if (!input.startsWith('/')) {
-      setSuggestions([]);
+    if (input.startsWith('>')) {
+      const query = input.slice(1).trim();
+      const actions = resolveActionsForTabType(activeTabType);
+      if (actions === null) {
+        console.log('[ACTIONS] no active plugin for tab type:', activeTabType);
+        setSuggestions([]);
+        setStatusText('No active plugin tab');
+        return;
+      }
+      if (actions.length === 0) {
+        console.log('[ACTIONS] plugin has no actions for tab type:', activeTabType);
+        setSuggestions([]);
+        setStatusText('No actions available');
+        return;
+      }
+      console.log('[ACTIONS] active plugin tab type:', activeTabType);
+      console.log('[ACTIONS] resolved', actions.length, 'actions');
+      console.log('[ACTIONS] autocomplete query:', JSON.stringify(query));
+
+      const matched = query
+        ? actions.filter(a => matchAction(query, a))
+        : actions;
+
+      const items: AutocompleteItem[] = matched.map(a => ({
+        value: '>' + a.id,
+        description: a.title ?? a.description ?? a.id,
+        type: 'action' as const,
+      }));
+
+      setSuggestions(items);
+      setStatusText(null);
+      setSelectedIndex(0);
       return;
     }
+
+    if (!input.startsWith('/')) {
+      setSuggestions([]);
+      setStatusText(null);
+      return;
+    }
+
+    setStatusText(null);
 
     const parsed = parse(input);
     if (!parsed) {
@@ -38,10 +78,11 @@ export function useAutocomplete() {
     const items = await getRuntime().getAutocomplete(parsed);
     setSuggestions(items);
     setSelectedIndex(0);
-  }, []);
+  }, [activeTabType]);
 
   const clear = useCallback(() => {
     setSuggestions([]);
+    setStatusText(null);
     setSelectedIndex(0);
   }, []);
 
@@ -61,6 +102,7 @@ export function useAutocomplete() {
   return {
     suggestions,
     selectedIndex,
+    statusText,
     update,
     clear,
     selectNext,
