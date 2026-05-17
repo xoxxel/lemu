@@ -44,8 +44,8 @@ export default function App() {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const terminalMsgId = useRef<string | null>(null);
 
-  const { add: addHistory } = useCommandHistory();
-  const { suggestions, selectedIndex, update: updateAutocomplete, clear: clearAutocomplete, selectNext, selectPrev } = useAutocomplete();
+  const { add: addHistory, up: historyUp, down: historyDown, reset: resetHistory, isNavigating } = useCommandHistory();
+  const { suggestions, selectedIndex, update: updateAutocomplete, clear: clearAutocomplete, selectNext, selectPrev, selectCurrent } = useAutocomplete();
   const terminal = useTerminal();
 
   const addMessage = useCallback((type: Message['type'], content: string, data?: unknown) => {
@@ -226,32 +226,68 @@ export default function App() {
     } else {
       clearAutocomplete();
     }
-  }, [updateAutocomplete, clearAutocomplete]);
+    if (isNavigating) resetHistory();
+  }, [updateAutocomplete, clearAutocomplete, isNavigating, resetHistory]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowUp' && !suggestions.length) {
-      e.preventDefault();
-    } else if (e.key === 'ArrowDown' && !suggestions.length) {
-      e.preventDefault();
-    } else if (e.key === 'ArrowDown' && suggestions.length) {
-      e.preventDefault();
-      selectNext();
-    } else if (e.key === 'ArrowUp' && suggestions.length) {
-      e.preventDefault();
-      selectPrev();
-    } else if (e.key === 'Tab' && suggestions.length) {
-      e.preventDefault();
-      const selected = suggestions[selectedIndex];
-      if (selected) {
-        setInputValue(selected.value + ' ');
-        clearAutocomplete();
+    const menuOpen = suggestions.length > 0;
+
+    // Menu is open → navigate or select
+    if (menuOpen) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        selectNext();
+        return;
       }
-    } else if (e.key === 'Escape') {
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        selectPrev();
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        const selected = selectCurrent();
+        if (selected) {
+          setInputValue(selected + ' ');
+          clearAutocomplete();
+        }
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        clearAutocomplete();
+        return;
+      }
+      // Any other key while menu is open just types normally
+      return;
+    }
+
+    // No menu — history navigation or submit
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prev = historyUp(inputValue);
+      if (prev !== null) setInputValue(prev);
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = historyDown();
+      if (next !== null) setInputValue(next);
+      return;
+    }
+
+    if (e.key === 'Escape') {
       clearAutocomplete();
-    } else if (e.key === 'Enter') {
+      resetHistory();
+      return;
+    }
+
+    if (e.key === 'Enter') {
+      e.preventDefault();
       handleSubmit(inputValue);
     }
-  }, [inputValue, suggestions, selectedIndex, selectNext, selectPrev, clearAutocomplete, handleSubmit]);
+  }, [inputValue, suggestions, selectCurrent, selectNext, selectPrev, clearAutocomplete, handleSubmit, historyUp, historyDown, resetHistory]);
 
   const renderTerminalPane = useCallback((sessionId: string, nodeId: string) => {
     return (

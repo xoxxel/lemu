@@ -53,5 +53,19 @@ export function useAutocomplete() {
     setSelectedIndex((prev) => Math.max(prev - 1, 0));
   }, []);
 
-  return { suggestions, selectedIndex, update, clear, selectNext, selectPrev };
+  const selectCurrent = useCallback((): string | null => {
+    if (suggestions.length === 0) return null;
+    return suggestions[selectedIndex]?.value ?? null;
+  }, [suggestions, selectedIndex]);
+
+  return {
+    suggestions,
+    selectedIndex,
+    update,
+    clear,
+    selectNext,
+    selectPrev,
+    selectCurrent,
+    isOpen: suggestions.length > 0,
+  };
 }
