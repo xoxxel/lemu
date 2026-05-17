@@ -26,6 +26,7 @@ export function useTerminal() {
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const messageHandlers = useRef<Set<(msg: WSMessage) => void>>(new Set());
+  const sessionDeferred = useRef<{ resolve: (id: string) => void } | null>(null);
 
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -54,6 +55,10 @@ export function useTerminal() {
               if (prev.find((s) => s.id === sid)) return prev;
               return [...prev, state];
             });
+          }
+          if (sessionDeferred.current) {
+            sessionDeferred.current.resolve(sid);
+            sessionDeferred.current = null;
           }
         }
 
@@ -95,6 +100,22 @@ export function useTerminal() {
       wsRef.current.send(JSON.stringify(msg));
     }
   }, []);
+
+  const ensureSession = useCallback(async (): Promise<string | null> => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return null;
+    if (sessionId) return sessionId;
+
+    return new Promise<string | null>((resolve) => {
+      sessionDeferred.current = { resolve };
+      sendMessage({ type: 'create-session' });
+      setTimeout(() => {
+        if (sessionDeferred.current) {
+          sessionDeferred.current = null;
+          resolve(null);
+        }
+      }, 10000);
+    });
+  }, [sendMessage, sessionId]);
 
   const sendInput = useCallback((input: string, targetSessionId?: string) => {
     sendMessage({
@@ -141,6 +162,7 @@ export function useTerminal() {
     sessions,
     activeSessionId,
     isConnected,
+    ensureSession,
     sendInput,
     onMessage,
     resize,

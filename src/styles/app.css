@@ -95,6 +95,25 @@
   gap: 4px;
 }
 
+.workspace-messages {
+  flex: 1;
+}
+
+.editor-tab-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.editor-tab-header {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
 .message-block {
   padding: 8px 12px;
   border-radius: 6px;
@@ -436,6 +455,109 @@
 
 .terminal-tab-close:hover {
   color: var(--red);
+}
+
+.main-tab-bar {
+  display: flex;
+  align-items: center;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  padding: 0 8px;
+  gap: 2px;
+  min-height: 36px;
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.main-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px 4px 0 0;
+  user-select: none;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  border-bottom: none;
+  transition: background 0.1s, color 0.1s;
+}
+
+.main-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.main-tab.active {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+.main-tab-icon {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.main-tab-close {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1;
+  margin-left: 4px;
+}
+
+.main-tab-close:hover {
+  color: var(--red);
+}
+
+.terminal-panel {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  max-height: 50%;
+  transition: max-height 0.2s ease;
+}
+
+.terminal-panel.collapsed {
+  max-height: 36px;
+  overflow: hidden;
+}
+
+.terminal-panel-header {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.terminal-panel-header .terminal-tab-bar {
+  flex: 1;
+  border-bottom: none;
+}
+
+.terminal-toggle-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px 12px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  line-height: 1;
+}
+
+.terminal-toggle-btn:hover {
+  color: var(--text-primary);
+}
+
+.terminal-panel-body {
+  flex: 1;
+  min-height: 100px;
+  overflow: hidden;
 }
 
 .workspace-terminal-full {

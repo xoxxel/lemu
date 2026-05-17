@@ -65,25 +65,23 @@ The user should be able to execute all terminal commands, run interactive applic
 ┌──────────────────────────────────────────────┐
 │ Sidebar              │ Main Area              │
 │ ───────────────────  │ ─────────────────────  │
-│ lemu                 │ [Terminal Tab Bar]     │
-│ > cwd                │ ─────────────────────  │
-│ ──────────           │                        │
-│ Terminals [+]        │   Workspace            │
-│   ● terminal         │   (Split Panes or      │
-│ ──────────           │    Message Stream)     │
-│ Processes (2)        │                        │
-│   ● npm 1234         │                        │
+│ lemu                 │ [Main Tab Bar]         │
+│ > cwd                │   (editor / preview /  │
+│ ──────────           │    task / ai tabs)     │
+│ Terminals [+]        │ ─────────────────────  │
+│   ● terminal         │                        │
+│ ──────────           │   Workspace            │
+│ Processes (2)        │   (Home / Tab Content  │
+│   ● npm 1234         │    / Message Stream)   │
 │ ──────────           │                        │
 │ Open Files           │                        │
-│   ◎ package.json     │                        │
-│ ──────────           │                        │
-│ Recent Files         │                        │
-│   ○ src/App.tsx      │                        │
-│ ──────────           │                        │
-│ Tasks                │                        │
-│   1 task             │                        │
-├──────────────────────┴────────────────────────┤
-│ > /command or shell input                     │
+│   ◎ package.json     ├────────────────────────┤
+│ ──────────           │ Terminal Panel          │
+│ Recent Files         │   [Terminal Tab Bar]    │
+│   ○ src/App.tsx      │   [xterm.js session]    │
+│ ──────────           ├────────────────────────┤
+│ Tasks                │ > /command or shell     │
+│   1 task             │                         │
 └──────────────────────────────────────────────┘
 ```
 
@@ -110,6 +108,21 @@ User presses ArrowUp (no menu)
   → User can edit or press Enter to execute
   → Typing resets history cursor
 ```
+
+### Workspace Rendering Rules
+
+| State | Rendered Content |
+|-------|-----------------|
+| Active editor tab | Tab state content (file preview) fills workspace |
+| No active tab, messages exist | Message stream scrollable view |
+| No active tab, no messages | Welcome/home screen with keyboard hints |
+
+### Terminal Panel Behavior
+
+- **Collapsible**: terminal panel at the bottom of the main area can be toggled open/closed
+- **Auto-open**: shell commands (non-slash input) automatically open the panel and create a session if needed
+- **Lazy sessions**: terminal sessions are only created on first shell command; no session is created on WebSocket connect
+- **Tab bar**: each session gets a tab in the terminal panel; new tabs created via `+` button or `/terminal new`
 
 ### Enter Key Logic
 
@@ -144,6 +157,9 @@ The terminal engine uses **node-pty** to spawn real shell processes:
 Client                  Server                  Shell
   │                       │                       │
   │── WS connect ────────>│                       │
+  │<── session-list ──────│                       │
+  │                       │                       │
+  │── create-session ────>│                       │
   │                       │── spawn shell ───────>│
   │<── session-created ───│                       │
   │                       │                       │
@@ -164,7 +180,9 @@ Client                  Server                  Shell
 - Sessions created on demand and tracked in `PTYManager` (Map)
 - Each session has: id, cwd, shellType, ptyProcess, outputBuffer, commandHistory
 - Sessions persist across commands (no isolated exec calls)
-- `PTYManager.ensureActiveSession()` creates default session on first connect
+- **No session is created on WebSocket connect** — sessions are lazy-created via `create-session` message
+- `PTYManager.ensureActiveSession()` is available server-side but no longer called automatically
+- Client-side `useTerminal.ensureSession()` lazily creates a session on first shell command
 - Multiple sessions supported per WebSocket client
 
 ### Interactive App Support
@@ -312,13 +330,13 @@ There is no external state management library. State is managed through:
 |-------|----------|------|-------------|
 | messages | App.tsx | `Message[]` | Workspace event stream |
 | inputValue | App.tsx | string | Current input text |
+| tabs | App.tsx | `Tab[]` | Open editor/task/preview/ai tabs |
+| activeTabId | App.tsx | `string \| null` | Active non-terminal tab |
+| terminalPanelOpen | App.tsx | boolean | Terminal panel collapsed state |
 | sessions | useTerminal.ts | `SessionState[]` | All PTY sessions |
 | activeSessionId | useTerminal.ts | string | Active PTY session |
-| splitNodes | App.tsx | `SplitNode[]` | Split pane layout tree |
 | suggestions | useAutocomplete.ts | `AutocompleteItem[]` | Autocomplete items |
 | commandHistory | command-history.ts | class | Global history store |
-| processes | App.tsx | `ProcessInfo[]` | Background processes |
-| openTabs | App.tsx | string[] | Open file tabs |
 | recentFiles | App.tsx | string[] | Recent files list |
 
 ### Persistence
@@ -392,15 +410,24 @@ User: /ai analyze project
   → system response block with AI answer
 ```
 
-### Terminal Streaming
+### Workspace Rendering Priority
+
+Workspace content is determined by this priority:
+1. If activeTab exists and is type `'editor'` → render file content from tab state (editor view)
+2. If no active tab but messages exist → render message stream
+3. If neither → render welcome/home screen
+
+### Terminal Panel + Message Streaming
 
 For shell commands:
 1. User types `npm install`
-2. Message created with `type: 'terminal'`
-3. WebSocket output events update the message's `data.output` array
-4. `TerminalBlock` component renders output with ANSI parsing
-5. Output accumulates and scrolls in real-time
-6. Collapsible header shows command name, line count, running status
+2. `useTerminal.ensureSession()` creates a session if none exists (lazy creation)
+3. Terminal panel auto-opens to show the xterm.js session
+4. Message created with `type: 'terminal'` in message stream
+5. WebSocket output events update the message's `data.output` array
+6. `TerminalBlock` component renders output with ANSI parsing
+7. Output accumulates and scrolls in real-time
+8. Collapsible header shows command name, line count, running status
 
 ### ANSI Parsing Pipeline
 
@@ -440,6 +467,8 @@ lemu/
     ├── App.tsx                    # Root component, state, routing, layout
     │
     ├── core/
+    │   ├── tabs/
+    │   │   └── types.ts           # Tab data model (Tab, TabType, helpers)
     │   ├── ai/                    # AI integration layer
     │   │   ├── types.ts           #   AI types (messages, tools, providers)
     │   │   ├── provider.ts        #   OpenAI-compatible API provider
@@ -489,13 +518,12 @@ lemu/
     │
     ├── components/
     │   ├── InputBar.tsx           # Input field with command menu overlay
-    │   ├── Workspace.tsx          # Split pane or message stream rendering
+    │   ├── MainTabBar.tsx         # Main tab bar (editor/preview/task/ai tabs)
+    │   ├── Workspace.tsx          # Home / editor tab / message stream rendering
     │   ├── Sidebar.tsx            # Navigation sidebar (sessions, files, tasks)
-    │   ├── TerminalTabBar.tsx     # Tab bar for terminal sessions
+    │   ├── TerminalTabBar.tsx     # Tab bar for terminal panel sessions
     │   ├── TerminalOutput.tsx     # xterm.js interactive terminal component
     │   ├── TerminalBlock.tsx      # Collapsible ANSI-rendered output block
-    │   ├── SplitPane.tsx          # Recursive split pane layout engine
-    │   └── ProcessMonitor.tsx     # Background process list
     │
     └── styles/
         ├── global.css             # CSS reset, theme variables, scrollbar
@@ -597,7 +625,8 @@ The following systems are already designed for AI integration:
 | AI Provider | `core/ai/provider.ts` | Swap AI backends (OpenAI → Ollama → Anthropic) |
 | PTY Manager | `server/pty/pty-manager.ts` | Add session clustering, terminal sharing |
 | WebSocket Protocol | `server/ws.ts` | Add new message types for new features |
-| SplitPane | `components/SplitPane.tsx` | Nested layouts, terminal grids |
+| MainTabBar | `components/MainTabBar.tsx` | Add custom tab types, tab context menus |
+| Tab Types | `core/tabs/types.ts` | Add new `TabType` entries for new tab kinds |
 | Workspace | `components/Workspace.tsx` | New block types for new data types |
 
 ### Future Capabilities Roadmap
@@ -623,9 +652,10 @@ The following systems are already designed for AI integration:
 1. **Messages array grows unbounded** — no cleanup mechanism for old messages
 2. **No state persistence** — history and messages lost on page reload
 3. **Server sessions lost on restart** — PTY processes killed when server restarts
-4. **Split pane resize** — divider dragging not implemented (CSS `col-resize` cursor only)
-5. **Process monitoring** — `/api/ws` `list-processes` returns hardcoded mock data, not real OS processes
-6. **Search limited to grep** — only works on systems with `grep` installed (Linux/macOS); Windows implementation needed
+4. **Process monitoring** — `/api/ws` `list-processes` returns hardcoded mock data, not real OS processes
+5. **Search limited to grep** — only works on systems with `grep` installed (Linux/macOS); Windows implementation needed
+6. **Editor tabs are read-only** — file content displayed as `<pre>` blocks; no editing capabilities yet
+7. **Terminal panel auto-open** — shell commands auto-open terminal panel, which may be unexpected for users who prefer it collapsed
 
 ### Architectural Constraints
 
@@ -645,10 +675,11 @@ The following systems are already designed for AI integration:
 ### Unsupported Workflows
 
 1. **No tab persistence** — open tabs reset on reload
-2. **No split pane persistence** — layout resets on reload
-3. **No workspace save/restore** — cannot resume a previous session
-4. **No file watcher** — no live file change detection
-5. **No notification system** — no way to signal long-running task completion
+2. **No workspace save/restore** — cannot resume a previous session
+3. **No file watcher** — no live file change detection
+4. **No notification system** — no way to signal long-running task completion
+5. **No split panes** — removed in tab-refactor; terminal panel replaces split pane layout
+6. **No in-editor file editing** — tabs are read-only previews
 
 ---
 
@@ -659,17 +690,21 @@ The following systems are already designed for AI integration:
 1. **Message cleanup** — Implement max message limit (e.g., 500) with automatic oldest removal
 2. **State persistence** — Save history + settings to localStorage; restore on reload
 3. **Session reconnection** — Auto-reconnect WebSocket on disconnect with session list recovery
-4. **Split pane resize** — Implement draggable dividers between split panes
+4. **Editor tabs: file editing** — Add in-tab file editing (monaco-editor or CodeMirror)
 5. **Real process monitoring** — Use OS-level process listing (e.g., `tasklist` on Windows, `ps` on Unix)
+6. **Tab reordering** — Drag-and-drop tab reordering in the main tab bar
+7. **Terminal panel resize** — Draggable divider between workspace content and terminal panel
+8. **Tab context menus** — Right-click on tabs for close-others, close-all, copy-path
 
 ### Medium-Term (1-2 months)
 
-6. **Tab persistence** — Save open tabs + split layout to localStorage, restore on reload
-7. **Search cross-platform** — Implement pure Node.js recursive search (replace grep dependency)
-8. **Output virtualization** — Virtual-scroll the message stream for long sessions
-9. **Workspace sessions** — Save/restore entire workspace state (tabs, splits, cwd)
-10. **Notification system** — Terminal bell, task completion signals, error alerts
-11. **Plugin infrastructure** — Dynamic command loading from external `.ts` files
+9. **Tab persistence** — Save open tabs to localStorage, restore on reload
+10. **Search cross-platform** — Implement pure Node.js recursive search (replace grep dependency)
+11. **Output virtualization** — Virtual-scroll the message stream for long sessions
+12. **Workspace sessions** — Save/restore entire workspace state (tabs, cwd)
+13. **Notification system** — Terminal bell, task completion signals, error alerts
+14. **Plugin infrastructure** — Dynamic command loading from external `.ts` files
+15. **Keyboard shortcut for terminal panel** — Ctrl+` or Ctrl+~ to toggle terminal panel
 
 ### Long-Term (3-6 months)
 

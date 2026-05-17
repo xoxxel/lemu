@@ -4,12 +4,14 @@ import { getRuntime } from './core/runtime/instance';
 import { useCommandHistory } from './hooks/useCommandHistory';
 import { useAutocomplete } from './hooks/useAutocomplete';
 import { useTerminal, type SessionState, type WSMessage } from './hooks/useTerminal';
+import type { Tab, TabType } from './core/tabs/types';
+import { createTabId, TAB_ICONS, friendlyTerminalName } from './core/tabs/types';
 import Sidebar from './components/Sidebar';
 import Workspace from './components/Workspace';
 import InputBar from './components/InputBar';
 import TerminalTabBar from './components/TerminalTabBar';
 import TerminalOutput from './components/TerminalOutput';
-import { createLeafNode, type SplitNode } from './components/SplitPane';
+import MainTabBar from './components/MainTabBar';
 import './styles/app.css';
 
 function applyAutocomplete(input: string, selected: string): string {
@@ -36,24 +38,15 @@ export interface Message {
   timestamp: number;
 }
 
-interface TerminalMessageData {
-  type: 'terminal';
-  sessionId: string;
-  output: string[];
-  isRunning: boolean;
-  command: string;
-}
-
 export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [cwd, setCwd] = useState('~');
-  const [openTabs, setOpenTabs] = useState<string[]>([]);
-  const [activeTab, setActiveTab] = useState<string | null>(null);
+  const [tabs, setTabs] = useState<Tab[]>([]);
+  const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [recentFiles, setRecentFiles] = useState<string[]>([]);
   const [activeTasks, setActiveTasks] = useState(0);
   const [inputValue, setInputValue] = useState('');
-  const [processes, setProcesses] = useState<Array<{ pid: number; command: string; sessionId: string }>>([]);
-  const [splitNodes, setSplitNodes] = useState<SplitNode[]>([]);
+  const [terminalPanelOpen, setTerminalPanelOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const terminalMsgId = useRef<string | null>(null);
@@ -78,6 +71,40 @@ export default function App() {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...updates } : m)));
   }, []);
 
+  const addTab = useCallback((type: TabType, title: string, path?: string, state?: Record<string, unknown>) => {
+    const id = createTabId(type);
+    const tab: Tab = {
+      id,
+      type,
+      title,
+      icon: TAB_ICONS[type],
+      closable: true,
+      path,
+      state,
+    };
+    setTabs((prev) => [...prev, tab]);
+    setActiveTabId(id);
+    return id;
+  }, []);
+
+  const closeTab = useCallback((id: string) => {
+    setTabs((prev) => {
+      const idx = prev.findIndex((t) => t.id === id);
+      const next = prev.filter((t) => t.id !== id);
+      if (activeTabId === id && next.length > 0) {
+        const newIdx = Math.min(idx, next.length - 1);
+        setActiveTabId(next[newIdx].id);
+      } else if (next.length === 0) {
+        setActiveTabId(null);
+      }
+      return next;
+    });
+  }, [activeTabId]);
+
+  const selectTab = useCallback((id: string) => {
+    setActiveTabId(id);
+  }, []);
+
   useEffect(() => {
     if (workspaceRef.current) {
       workspaceRef.current.scrollTop = workspaceRef.current.scrollHeight;
@@ -95,42 +122,35 @@ export default function App() {
         setMessages((prev) =>
           prev.map((m) => {
             if (m.id === terminalMsgId.current && m.type === 'terminal') {
-              const data = m.data as TerminalMessageData | undefined;
-              const newOutput = [...(data?.output || []), msg.data as string];
+              const newOutput = [...(m.terminalOutput || []), msg.data as string];
               return {
                 ...m,
                 terminalOutput: newOutput,
-                data: { ...data, output: newOutput, isRunning: true } as TerminalMessageData,
               };
             }
             return m;
           })
         );
       }
-      if (msg.type === 'process-list') {
-        setProcesses((msg.processes as Array<{ pid: number; command: string; sessionId: string }>) || []);
-      }
     });
     return unsub;
   }, [terminal]);
 
-  useEffect(() => {
-    if (terminal.sessionId && splitNodes.length === 0) {
-      const node = createLeafNode(terminal.sessionId);
-      setSplitNodes([node]);
+  const handleShellCommand = useCallback(async (trimmed: string) => {
+    const sid = await terminal.ensureSession();
+    if (!sid) {
+      addMessage('error', 'Failed to create terminal session.');
+      return;
     }
-  }, [terminal.sessionId, splitNodes.length]);
 
-  const handleShellCommand = useCallback((trimmed: string) => {
-    const sid = terminal.activeSessionId || terminal.sessionId;
-    if (!sid) return;
+    setTerminalPanelOpen(true);
 
     const userMsgId = addMessage('user', trimmed);
 
-    const termData: TerminalMessageData = {
-      type: 'terminal',
+    const termData = {
+      type: 'terminal' as const,
       sessionId: sid,
-      output: [],
+      output: [] as string[],
       isRunning: true,
       command: trimmed,
     };
@@ -154,15 +174,10 @@ export default function App() {
     setInputValue('');
     clearAutocomplete();
 
-    console.log('[APP] handleSubmit input="%s"', trimmed);
-    console.log('[APP] isSlashCommand=%s isShellCommand=%s', isSlashCommand(trimmed), isShellCommand(trimmed));
-
     if (isSlashCommand(trimmed)) {
       addMessage('user', trimmed);
       const parsed = parse(trimmed);
-      console.log('[APP] parse result: %j', parsed);
       if (!parsed) {
-        console.log('[APP] Parse returned null for slash input!');
         addMessage('error', 'Invalid command syntax.');
         return;
       }
@@ -172,23 +187,28 @@ export default function App() {
         return;
       }
 
-      if (parsed.name === 'split' || parsed.name === 'hsplit' || parsed.name === 'vsplit') {
-        handleSplitCommand(parsed.name, parsed.args);
+      if (parsed.name === 'open' || parsed.name === 'edit') {
+        const path = parsed.args[0];
+        if (!path) {
+          addMessage('error', 'Usage: /open <path>');
+          return;
+        }
+        const result = await getRuntime().execute(parsed);
+        addMessage(result.success ? 'system' : 'error', result.message, result.data);
+        if (result.success && result.data && typeof result.data === 'object' && 'path' in result.data) {
+          addTab('editor', path, path, result.data as Record<string, unknown>);
+          setRecentFiles((prev) => {
+            const next = [path, ...prev.filter((f) => f !== path)].slice(0, 10);
+            return next;
+          });
+        }
         return;
       }
 
-      if (parsed.name === 'ps') {
-        handlePSCommand();
-        return;
-      }
-
-      console.log('[APP] Calling runtime.execute() for command: %s', parsed.name);
       let result;
       try {
         result = await getRuntime().execute(parsed);
-        console.log('[APP] runtime.execute() result: success=%s message=%s', result.success, result.message?.slice(0, 120));
       } catch (err) {
-        console.log('[APP] runtime.execute() THREW: %o', err);
         addMessage('error', `Execution error: ${err instanceof Error ? err.message : String(err)}`);
         return;
       }
@@ -200,21 +220,14 @@ export default function App() {
           const next = [path, ...prev.filter((f) => f !== path)].slice(0, 10);
           return next;
         });
-        setOpenTabs((prev) => {
-          if (!prev.includes(path)) return [...prev, path];
-          return prev;
-        });
-        setActiveTab(path);
       }
     } else if (isShellCommand(trimmed)) {
-      console.log('[APP] Routing to SHELL: %s', trimmed);
-      handleShellCommand(trimmed);
+      await handleShellCommand(trimmed);
     } else {
-      console.log('[APP] Input classified as NEITHER slash nor shell command: %s', trimmed);
       addMessage('user', trimmed);
       addMessage('error', 'Not a valid command. Type / for available commands.');
     }
-  }, [addHistory, addMessage, updateMessage, clearAutocomplete, terminal, handleShellCommand]);
+  }, [addHistory, addMessage, updateMessage, clearAutocomplete, terminal, handleShellCommand, addTab]);
 
   const handleTerminalCommand = useCallback((args: string[]) => {
     const sub = args[0];
@@ -225,6 +238,7 @@ export default function App() {
       addMessage('system', `Terminal sessions:\n${list || '  No sessions'}`);
     } else if (sub === 'new' || sub === 'create') {
       terminal.createSession();
+      setTerminalPanelOpen(true);
       addMessage('system', 'Creating new terminal session...');
     } else if ((sub === 'close' || sub === 'rm') && args[1]) {
       terminal.destroySession(args[1]);
@@ -236,18 +250,6 @@ export default function App() {
       addMessage('error', 'Usage: /terminal [list|new|close <id>|switch <id>]');
     }
   }, [terminal, addMessage]);
-
-  const handleSplitCommand = useCallback((name: string, args: string[]) => {
-    const direction = name === 'vsplit' ? 'vertical' : 'horizontal';
-    addMessage('system', `Split ${direction}`);
-  }, [addMessage]);
-
-  const handlePSCommand = useCallback(() => {
-    if (terminal.ws && terminal.ws.readyState === WebSocket.OPEN) {
-      terminal.ws.send(JSON.stringify({ type: 'list-processes' }));
-    }
-    addMessage('system', `Background processes: ${processes.length}`);
-  }, [terminal.ws, processes.length, addMessage]);
 
   const handleInputChange = useCallback((value: string) => {
     setInputValue(value);
@@ -262,7 +264,6 @@ export default function App() {
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     const menuOpen = suggestions.length > 0;
 
-    // Menu is open → navigate or select
     if (menuOpen) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -288,11 +289,9 @@ export default function App() {
         clearAutocomplete();
         return;
       }
-      // Any other key while menu is open just types normally
       return;
     }
 
-    // No menu — history navigation or submit
     if (e.key === 'ArrowUp') {
       e.preventDefault();
       const prev = historyUp(inputValue);
@@ -319,53 +318,73 @@ export default function App() {
     }
   }, [inputValue, suggestions, selectCurrent, selectNext, selectPrev, clearAutocomplete, handleSubmit, historyUp, historyDown, resetHistory]);
 
-  const renderTerminalPane = useCallback((sessionId: string, nodeId: string) => {
-    return (
-      <TerminalOutput
-        key={nodeId}
-        sessionId={sessionId}
-        ws={terminal.ws}
-      />
-    );
-  }, [terminal.ws]);
+  const mainTabs = tabs;
+  const activeTab = tabs.find((t) => t.id === activeTabId) || null;
+
+  const handleTerminalToggle = useCallback(() => {
+    setTerminalPanelOpen((prev) => !prev);
+  }, []);
 
   return (
     <div className="app" onClick={() => inputRef.current?.focus()}>
       <Sidebar
         cwd={cwd}
         recentFiles={recentFiles}
-        openTabs={openTabs}
-        activeTab={activeTab}
+        openTabs={tabs.map((t) => t.path).filter(Boolean) as string[]}
+        activeTab={activeTab?.path || null}
         activeTasks={activeTasks}
         terminalSessions={terminal.sessions}
         activeTerminalSession={terminal.activeSessionId}
-        onTabClick={(tab) => setActiveTab(tab)}
+        onTabClick={(path) => {
+          const tab = tabs.find((t) => t.path === path);
+          if (tab) setActiveTabId(tab.id);
+        }}
         onTerminalSessionClick={(id) => terminal.switchSession(id)}
         onTerminalSessionClose={(id) => terminal.destroySession(id)}
-        onNewTerminalSession={() => terminal.createSession()}
-        processes={processes}
+        onNewTerminalSession={() => {
+          terminal.createSession();
+          setTerminalPanelOpen(true);
+        }}
       />
       <div className="main">
-        <TerminalTabBar
-          sessions={terminal.sessions}
-          activeSessionId={terminal.activeSessionId}
-          onSelect={(id) => terminal.switchSession(id)}
-          onCreate={() => terminal.createSession()}
-          onClose={(id) => terminal.destroySession(id)}
-        />
+        {mainTabs.length > 0 && (
+          <MainTabBar
+            tabs={mainTabs}
+            activeTabId={activeTabId}
+            onSelect={selectTab}
+            onClose={closeTab}
+          />
+        )}
         <Workspace
           ref={workspaceRef}
           messages={messages}
-          activeTabData={activeTab ? (messages.find(m => {
-            if (m.data && typeof m.data === 'object') {
-              const d = m.data as Record<string, unknown>;
-              return d.path === activeTab;
-            }
-            return false;
-          }) ?? null) : null}
-          splitNodes={splitNodes}
-          renderTerminalPane={renderTerminalPane}
+          activeTab={activeTab}
+          tabs={tabs}
         />
+        {terminal.sessions.length > 0 && (
+          <div className={`terminal-panel ${terminalPanelOpen ? '' : 'collapsed'}`}>
+            <div className="terminal-panel-header">
+              <TerminalTabBar
+                sessions={terminal.sessions}
+                activeSessionId={terminal.activeSessionId}
+                onSelect={(id) => terminal.switchSession(id)}
+                onCreate={() => terminal.createSession()}
+                onClose={(id) => terminal.destroySession(id)}
+              />
+              <button className="terminal-toggle-btn" onClick={handleTerminalToggle}>
+                {terminalPanelOpen ? '\u25BC' : '\u25B2'}
+              </button>
+            </div>
+            {terminalPanelOpen && terminal.activeSessionId && (
+              <div className="terminal-panel-body">
+                <TerminalOutput
+                  sessionId={terminal.activeSessionId}
+                  ws={terminal.ws}
+                />
+              </div>
+            )}
+          </div>
+        )}
         <InputBar
           ref={inputRef}
           value={inputValue}

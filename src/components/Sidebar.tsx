@@ -12,7 +12,7 @@ interface SidebarProps {
   onTerminalSessionClick: (id: string) => void;
   onTerminalSessionClose: (id: string) => void;
   onNewTerminalSession: () => void;
-  processes: Array<{ pid: number; command: string; sessionId: string }>;
+  processes?: Array<{ pid: number; command: string; sessionId: string }>;
 }
 
 export default function Sidebar({
@@ -65,12 +65,12 @@ export default function Sidebar({
       </div>
 
       <div className="sidebar-section">
-        <div className="sidebar-section-title">Processes ({processes.length})</div>
-        {processes.length === 0 && (
+        <div className="sidebar-section-title">Processes ({(processes || []).length})</div>
+        {(processes || []).length === 0 && (
           <div className="sidebar-item dim">No background processes</div>
         )}
-        {processes.map((p) => (
-          <div key={p.pid} className="sidebar-item">
+        {(processes || []).map((p, idx) => (
+          <div key={p.pid || idx} className="sidebar-item">
             <span className="icon">{'\u25CF'}</span>
             <span className="sidebar-item-label">{p.command}</span>
             <span className="sidebar-item-meta">{p.pid}</span>

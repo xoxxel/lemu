@@ -1,14 +1,12 @@
 import { forwardRef } from 'react';
 import type { Message } from '../App';
+import type { Tab } from '../core/tabs/types';
 import TerminalBlock from './TerminalBlock';
-import SplitPane from './SplitPane';
-import type { SplitNode } from './SplitPane';
 
 interface WorkspaceProps {
   messages: Message[];
-  activeTabData: Message | null;
-  splitNodes?: SplitNode[];
-  renderTerminalPane?: (sessionId: string, nodeId: string) => React.ReactNode;
+  activeTab: Tab | null;
+  tabs: Tab[];
 }
 
 function renderMessage(msg: Message) {
@@ -37,63 +35,22 @@ function renderMessage(msg: Message) {
   );
 }
 
-function renderTerminals(splitNodes: SplitNode[], renderTerminalPane: (sessionId: string, nodeId: string) => React.ReactNode) {
-  if (splitNodes.length === 1) {
-    return (
-      <div className="workspace-terminal-full" key="terminals">
-        <SplitPane
-          node={splitNodes[0]}
-          onSplit={() => {}}
-          onClose={() => {}}
-          renderTerminal={renderTerminalPane}
-        />
-      </div>
-    );
-  }
-  return (
-    <div className="workspace-split-container" key="terminals">
-      {splitNodes.map((node) => (
-        <div key={node.id} className="workspace-split-pane" style={{ flex: 1 }}>
-          <SplitPane
-            node={node}
-            onSplit={() => {}}
-            onClose={() => {}}
-            renderTerminal={renderTerminalPane}
-          />
-        </div>
-      ))}
-    </div>
-  );
-}
-
 const Workspace = forwardRef<HTMLDivElement, WorkspaceProps>(
-  ({ messages, splitNodes, renderTerminalPane }: WorkspaceProps, ref) => {
-    const hasTerminals = splitNodes && splitNodes.length > 0 && renderTerminalPane;
+  ({ messages, activeTab, tabs }: WorkspaceProps, ref) => {
     const hasMessages = messages.length > 0;
+    const hasEditorTab = activeTab && activeTab.type === 'editor' && activeTab.state;
 
-    if (!hasTerminals && !hasMessages) {
+    if (hasEditorTab) {
       return (
         <div className="workspace" ref={ref}>
-          <div className="welcome">
-            <div className="title">lemu</div>
-            <div className="subtitle">terminal workspace</div>
-            <div className="hint">
-              Just type any command to run it in the shell, or <kbd>/</kbd> for internal commands
-            </div>
-          </div>
+          {renderEditorContent(activeTab)}
         </div>
       );
     }
 
-    const children: React.ReactNode[] = [];
-
-    if (hasTerminals) {
-      children.push(renderTerminals(splitNodes!, renderTerminalPane!));
-    }
-
     if (hasMessages) {
-      children.push(
-        <div className="workspace-messages" key="messages">
+      return (
+        <div className="workspace workspace-messages" ref={ref}>
           {messages.map(renderMessage)}
         </div>
       );
@@ -101,11 +58,30 @@ const Workspace = forwardRef<HTMLDivElement, WorkspaceProps>(
 
     return (
       <div className="workspace" ref={ref}>
-        {children}
+        <div className="welcome">
+          <div className="title">lemu</div>
+          <div className="subtitle">terminal workspace</div>
+          <div className="hint">
+            Just type any command to run it in the shell, or <kbd>/</kbd> for internal commands
+          </div>
+        </div>
       </div>
     );
   }
 );
+
+function renderEditorContent(tab: Tab) {
+  const state = tab.state as Record<string, unknown> | undefined;
+  if (!state) return null;
+  const content = state.content as string;
+  const path = state.path as string;
+  return (
+    <div className="editor-tab-content">
+      <div className="editor-tab-header">{path || tab.title}</div>
+      <pre className="file-content">{content}</pre>
+    </div>
+  );
+}
 
 function renderDataBlock(data: unknown) {
   if (!data || typeof data !== 'object') return null;

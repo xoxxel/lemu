@@ -25,19 +25,10 @@ export function setupWebSocket(server: Server): WebSocketServer {
   wss.on('connection', (ws: WebSocket) => {
     let sessionId: string | null = null;
 
-    const session = ptyManager.ensureActiveSession();
-    sessionId = session.id;
-
-    const cleanup = session.onData((data: string) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'output', sessionId: session.id, data }));
-      }
-    });
-
+    // Send current session list (do NOT auto-create a session)
     ws.send(JSON.stringify({
-      type: 'session-created',
-      sessionId: session.id,
-      state: session.getState(),
+      type: 'session-list',
+      sessions: ptyManager.listSessions(),
     }));
 
     ws.on('message', (raw: Buffer) => {
@@ -97,10 +88,6 @@ export function setupWebSocket(server: Server): WebSocketServer {
       } catch {
         // ignore invalid messages
       }
-    });
-
-    ws.on('close', () => {
-      cleanup();
     });
   });
 
