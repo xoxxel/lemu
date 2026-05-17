@@ -1,12 +1,5 @@
 import { forwardRef } from 'react';
-import type { AutocompleteItem, CommandExample } from '../core/commands/types';
-
-interface ContextualHelp {
-  name: string;
-  description: string;
-  usage?: string;
-  examples?: CommandExample[];
-}
+import type { AutocompleteItem } from '../core/commands/types';
 
 interface InputBarProps {
   value: string;
@@ -15,15 +8,13 @@ interface InputBarProps {
   suggestions: AutocompleteItem[];
   selectedIndex: number;
   onSuggestionClick: (index: number) => void;
-  contextualHelp?: ContextualHelp | null;
 }
 
 const InputBar = forwardRef<HTMLInputElement, InputBarProps>(
-  ({ value, onChange, onKeyDown, suggestions, selectedIndex, onSuggestionClick, contextualHelp }, ref) => {
-    const showContextual = contextualHelp && contextualHelp.examples && contextualHelp.examples.length > 0;
+  ({ value, onChange, onKeyDown, suggestions, selectedIndex, onSuggestionClick }, ref) => {
     return (
       <div className="input-bar-container">
-        {(suggestions.length > 0 || showContextual) && (
+        {suggestions.length > 0 && (
           <div className="command-menu">
             {suggestions.map((item, idx) => (
               <div
@@ -49,23 +40,6 @@ const InputBar = forwardRef<HTMLInputElement, InputBarProps>(
                 )}
               </div>
             ))}
-            {showContextual && suggestions.length > 0 && <div className="contextual-help-separator" />}
-            {showContextual && (
-              <div className="contextual-help">
-                <div className="contextual-help-header">
-                  <span className="contextual-help-usage">{contextualHelp.usage}</span>
-                  <span className="contextual-help-name">/{contextualHelp.name}</span>
-                </div>
-                <div className="contextual-help-examples">
-                  {(contextualHelp.examples || []).map((ex, i) => (
-                    <div key={i} className="contextual-help-example">
-                      <span className="contextual-help-input">{ex.input}</span>
-                      <span className="contextual-help-desc">{ex.description}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
         <div className="input-bar">
@@ -80,7 +54,7 @@ const InputBar = forwardRef<HTMLInputElement, InputBarProps>(
             spellCheck={false}
             autoFocus
           />
-          {value && suggestions.length === 0 && !showContextual && (
+          {value && suggestions.length === 0 && (
             <span className="hint">Enter to run</span>
           )}
         </div>

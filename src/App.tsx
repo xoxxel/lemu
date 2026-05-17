@@ -2,8 +2,6 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { parse, isSlashCommand, isShellCommand } from './core/parser';
 import { getRuntime } from './core/runtime/instance';
 import { useCommandHistory } from './hooks/useCommandHistory';
-import { registry } from './core/commands/registry';
-import type { Command } from './core/commands/types';
 import { useAutocomplete } from './hooks/useAutocomplete';
 import { useTerminal, type SessionState, type WSMessage } from './hooks/useTerminal';
 import type { Tab, TabType } from './core/tabs/types';
@@ -347,19 +345,6 @@ export default function App() {
     }
   })();
 
-  const contextualHelp = (() => {
-    if (!inputValue.startsWith('/')) return null;
-    const trimmed = inputValue.trim();
-    const afterSlash = trimmed.slice(1);
-    const spaceIdx = afterSlash.indexOf(' ');
-    if (spaceIdx < 0) return null;
-    const cmdName = afterSlash.slice(0, spaceIdx).toLowerCase();
-    if (!cmdName) return null;
-    const cmd: Command | undefined = registry.get(cmdName) || registry.findByAlias(cmdName);
-    if (!cmd || !cmd.examples || cmd.examples.length === 0) return null;
-    return { name: cmdName, description: cmd.description, usage: cmd.usage, examples: cmd.examples };
-  })();
-
   const mainTabs = tabs;
   const activeTab = tabs.find((t) => t.id === activeTabId) || null;
 
@@ -447,7 +432,6 @@ export default function App() {
               inputRef.current?.focus();
             }
           }}
-          contextualHelp={contextualHelp}
         />
       </div>
     </div>
