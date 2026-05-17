@@ -17,6 +17,18 @@ const gitCommand: Command = {
   name: 'git',
   description: 'Run git commands',
   aliases: ['g'],
+  usage: '/git <subcommand> [args...]',
+  examples: [
+    { input: '/git status', description: 'Check repository status' },
+    { input: '/git add -A', description: 'Stage all changes' },
+    { input: '/git commit -m "fix: bug"', description: 'Create a commit' },
+    { input: '/g log --oneline -5', description: 'View recent commits using alias' },
+  ],
+  edgeCases: [
+    { scenario: 'not a git repo', input: '/git status', expected: 'fatal: not a git repository' },
+    { scenario: 'no subcommand', input: '/git', expected: 'Usage error' },
+    { scenario: 'git not installed', input: '/git status', expected: 'command not found' },
+  ],
   async execute(args) {
     const cmd = args.join(' ');
     try {

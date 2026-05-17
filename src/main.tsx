@@ -10,6 +10,7 @@ import { taskPlugin } from './plugins/task';
 import { execPlugin } from './plugins/exec';
 import { browserPlugin } from './plugins/browser';
 import { aiPlugin } from './plugins/ai';
+import { helpPlugin } from './plugins/help';
 import './styles/global.css';
 
 function renderApp() {
@@ -30,7 +31,7 @@ function renderApp() {
 async function bootstrap() {
   const runtime = await createRuntime();
   setRuntime(runtime);
-  await runtime.init([fsPlugin, searchPlugin, gitPlugin, taskPlugin, execPlugin, browserPlugin, aiPlugin]);
+  await runtime.init([fsPlugin, searchPlugin, gitPlugin, taskPlugin, execPlugin, browserPlugin, aiPlugin, helpPlugin]);
   renderApp();
 }
 

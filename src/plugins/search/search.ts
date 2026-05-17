@@ -15,6 +15,17 @@ const searchCommand: Command = {
   name: 'search',
   description: 'Search file contents for a pattern',
   aliases: ['grep', 'find'],
+  usage: '/search <pattern> [directory]',
+  examples: [
+    { input: '/search useState', description: 'Search for component usage' },
+    { input: '/search TODO src/components', description: 'Search in specific directory' },
+    { input: '/grep function', description: 'Search using alias' },
+  ],
+  edgeCases: [
+    { scenario: 'no pattern', input: '/search', expected: 'Usage error' },
+    { scenario: 'no results', input: '/search xyzzy_nonexistent', expected: 'No results for...' },
+    { scenario: 'directory traversal', input: '/search foo ../../etc', expected: 'error: Path outside workspace' },
+  ],
   async execute(args) {
     const pattern = args[0];
     const dir = args[1];

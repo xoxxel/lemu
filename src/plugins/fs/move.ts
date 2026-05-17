@@ -26,6 +26,17 @@ const moveCommand: Command = {
   name: 'move',
   description: 'Move or rename a file/directory',
   aliases: ['mv', 'rename'],
+  usage: '/move <source> <destination>',
+  examples: [
+    { input: '/move old.ts new.ts', description: 'Rename a file' },
+    { input: '/mv temp.log logs/temp.log', description: 'Move to subdirectory' },
+    { input: '/rename draft.md final.md', description: 'Rename using alias' },
+  ],
+  edgeCases: [
+    { scenario: 'missing destination', input: '/move file.ts', expected: 'Usage error' },
+    { scenario: 'source not found', input: '/move nope.ts dest.ts', expected: 'error: ENOENT' },
+    { scenario: 'move to different filesystem', input: '/move file.ts /different/fs/dest', expected: 'may fail or copy+delete' },
+  ],
   async execute(args) {
     const [src, dest] = args;
     try {

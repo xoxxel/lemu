@@ -26,6 +26,17 @@ const deleteCommand: Command = {
   name: 'delete',
   description: 'Delete a file or directory (requires confirmation)',
   aliases: ['rm', 'del', 'remove'],
+  usage: '/delete [-f] <path>',
+  examples: [
+    { input: '/delete -f temp.log', description: 'Delete a file' },
+    { input: '/rm -f old-file.ts', description: 'Delete using alias' },
+    { input: '/delete -f node_modules', description: 'Delete directory recursively' },
+  ],
+  edgeCases: [
+    { scenario: 'safety prompt without -f', input: '/delete temp.log', expected: 'confirmation message, not deleted' },
+    { scenario: 'file not found', input: '/delete -f nope.ts', expected: 'error: ENOENT' },
+    { scenario: 'path traversal', input: '/delete -f ../../etc', expected: 'error: Path outside workspace' },
+  ],
   async execute(args) {
     const path = args[0];
     const force = args.includes('-f') || args.includes('--force');

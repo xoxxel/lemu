@@ -17,6 +17,17 @@ const runCommand: Command = {
   name: 'run',
   description: 'Execute a shell command',
   aliases: ['exec', '!'],
+  usage: '/run <command> or !<command>',
+  examples: [
+    { input: '/run npm test', description: 'Run npm tests' },
+    { input: '!echo hello', description: 'Quick exec using shorthand' },
+    { input: '/run node -e "console.log(1+1)"', description: 'Run inline script' },
+  ],
+  edgeCases: [
+    { scenario: 'command not found', input: '/run xyzzy', expected: 'error: command not found' },
+    { scenario: 'non-zero exit', input: '/run exit 1', expected: 'stderr with exit code' },
+    { scenario: 'empty command', input: '/run', expected: 'depends on shell behavior' },
+  ],
   async execute(args) {
     const cmd = args.join(' ');
     try {

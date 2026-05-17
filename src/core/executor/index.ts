@@ -53,7 +53,15 @@ export class Executor {
         type: 'command' as const,
       }));
     }
-    return cmd.autocomplete(parsed.args);
+    const suggestions = await cmd.autocomplete(parsed.args);
+    if (parsed.args.length === 0 && cmd.usage && suggestions.length > 0) {
+      suggestions.unshift({
+        value: cmd.usage,
+        description: cmd.description,
+        type: 'help',
+      });
+    }
+    return suggestions;
   }
 }
 

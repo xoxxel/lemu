@@ -1,4 +1,12 @@
+import { useState } from 'react';
 import type { SessionState } from '../hooks/useTerminal';
+
+interface SidebarCommand {
+  name: string;
+  description: string;
+  pluginName: string;
+  usage?: string;
+}
 
 interface SidebarProps {
   cwd: string;
@@ -12,6 +20,8 @@ interface SidebarProps {
   onTerminalSessionClick: (id: string) => void;
   onTerminalSessionClose: (id: string) => void;
   onNewTerminalSession: () => void;
+  onCommandClick?: (command: string) => void;
+  commands?: SidebarCommand[];
   processes?: Array<{ pid: number; command: string; sessionId: string }>;
 }
 
@@ -27,8 +37,12 @@ export default function Sidebar({
   onTerminalSessionClick,
   onTerminalSessionClose,
   onNewTerminalSession,
+  onCommandClick,
+  commands,
   processes,
 }: SidebarProps) {
+  const [helpOpen, setHelpOpen] = useState(false);
+
   return (
     <aside className="sidebar">
       <div className="sidebar-header">lemu</div>
@@ -63,6 +77,32 @@ export default function Sidebar({
           </div>
         ))}
       </div>
+
+      {commands && commands.length > 0 && (
+        <div className="sidebar-section">
+          <div className="sidebar-section-title" onClick={() => setHelpOpen(!helpOpen)} style={{ cursor: 'pointer' }}>
+            {helpOpen ? '\u25BC' : '\u25B6'} Commands ({commands.length})
+          </div>
+          {helpOpen && (
+            <div className="sidebar-commands-list">
+              {commands.map((cmd) => (
+                <div
+                  key={cmd.name}
+                  className="sidebar-item sidebar-command-item"
+                  onClick={() => onCommandClick?.(cmd.name)}
+                  title={`/${cmd.name} — ${cmd.description}`}
+                >
+                  <span className="icon">{'/'}</span>
+                  <span className="sidebar-item-label">
+                    <span className="cmd-name">{cmd.name}</span>
+                    <span className="cmd-plugin">{cmd.pluginName}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="sidebar-section">
         <div className="sidebar-section-title">Processes ({(processes || []).length})</div>

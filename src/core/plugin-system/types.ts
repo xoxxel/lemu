@@ -12,6 +12,15 @@ export interface AppRenderContext {
   registerWrapper(wrapper: unknown): void;
 }
 
+export interface PluginDocs {
+  overview: string;
+  examples?: string;
+  workflows?: string;
+  troubleshooting?: string;
+  tips?: string;
+  limitations?: string;
+}
+
 export interface Plugin {
   id: string;
   name: string;
@@ -25,6 +34,7 @@ export interface Plugin {
   onCommandExecuted?(payload: CommandExecutedPayload): Promise<void>;
   onAppRender?(ctx: AppRenderContext): Promise<void>;
   onCleanup?(): Promise<void>;
+  docs?: PluginDocs;
 }
 
 export interface ShellService {

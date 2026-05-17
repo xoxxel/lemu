@@ -24,6 +24,17 @@ const openCommand: Command = {
   name: 'open',
   description: 'Open and display a file',
   aliases: ['o', 'cat', 'view'],
+  usage: '/open <filepath>',
+  examples: [
+    { input: '/open package.json', description: 'Open file from workspace root' },
+    { input: '/open src/App.tsx', description: 'Open file in subdirectory' },
+    { input: '/o README.md', description: 'Open using alias' },
+  ],
+  edgeCases: [
+    { scenario: 'file not found', input: '/open nope.ts', expected: 'error with ENOENT description' },
+    { scenario: 'path traversal', input: '/open ../../etc/passwd', expected: 'error: Path outside workspace' },
+    { scenario: 'directory instead of file', input: '/open src', expected: 'error: EISDIR' },
+  ],
   async execute(args) {
     const path = args[0];
     console.log('[CMD_OPEN] execute() path=%s', path);

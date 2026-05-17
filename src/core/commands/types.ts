@@ -7,7 +7,19 @@ export interface CommandResult {
 export interface AutocompleteItem {
   value: string;
   description?: string;
-  type?: 'file' | 'dir' | 'command' | 'arg';
+  type?: 'file' | 'dir' | 'command' | 'arg' | 'help';
+}
+
+export interface CommandExample {
+  input: string;
+  description: string;
+  output?: string;
+}
+
+export interface CommandEdgeCase {
+  scenario: string;
+  input: string;
+  expected: string;
 }
 
 export interface Command {
@@ -17,6 +29,9 @@ export interface Command {
   execute(args: string[]): Promise<CommandResult>;
   autocomplete(args: string[]): Promise<AutocompleteItem[]>;
   validate(args: string[]): string | null;
+  usage?: string;
+  examples?: CommandExample[];
+  edgeCases?: CommandEdgeCase[];
 }
 
 export interface ParsedCommand {

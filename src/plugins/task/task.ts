@@ -12,6 +12,20 @@ const taskCommand: Command = {
   name: 'task',
   description: 'Manage tasks (list, add, done, remove)',
   aliases: ['todo', 'tasks'],
+  usage: '/task [list|add <desc>|done <id>|remove <id>]',
+  examples: [
+    { input: '/task add Fix login bug', description: 'Add a new task' },
+    { input: '/task list', description: 'List all tasks' },
+    { input: '/task done 1712345678901', description: 'Mark task as completed' },
+    { input: '/task remove 1712345678901', description: 'Remove a task' },
+    { input: '/todo add Write tests', description: 'Add using alias' },
+  ],
+  edgeCases: [
+    { scenario: 'no tasks', input: '/task list', expected: 'No tasks.' },
+    { scenario: 'add without description', input: '/task add', expected: 'Usage error' },
+    { scenario: 'done with invalid id', input: '/task done 999', expected: 'Task not found: 999' },
+    { scenario: 'in-memory only', input: 'refresh page', expected: 'All tasks lost' },
+  ],
   async execute(args) {
     const sub = args[0];
 

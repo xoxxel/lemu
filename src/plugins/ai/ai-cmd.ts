@@ -4,6 +4,18 @@ const aiCommand: Command = {
   name: 'ai',
   description: 'Ask AI about the workspace (requires API key)',
   aliases: ['ask'],
+  usage: '/ai <question> or /ai config <key=value>',
+  examples: [
+    { input: '/ai config apiKey=sk-...', description: 'Configure AI provider with API key' },
+    { input: '/ai What is this project?', description: 'Ask a question about the workspace' },
+    { input: '/ai Explain the plugin system', description: 'Get explanation of code architecture' },
+    { input: '/ask How does routing work?', description: 'Ask using alias' },
+  ],
+  edgeCases: [
+    { scenario: 'not configured', input: '/ai hello', expected: 'error: No API key configured' },
+    { scenario: 'empty key', input: '/ai config apiKey=', expected: 'Provide an API key' },
+    { scenario: 'network error', input: '/ai question', expected: 'error: fetch failed' },
+  ],
   async execute(args) {
     if (args.length === 0) return { success: false, message: 'Usage: /ai <question> or /ai config <key=value>' };
 

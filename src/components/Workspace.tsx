@@ -62,7 +62,7 @@ const Workspace = forwardRef<HTMLDivElement, WorkspaceProps>(
           <div className="title">lemu</div>
           <div className="subtitle">terminal workspace</div>
           <div className="hint">
-            Just type any command to run it in the shell, or <kbd>/</kbd> for internal commands
+            Type any command for the shell, <kbd>/</kbd> for internal commands, or <kbd>@command</kbd> for instant help
           </div>
         </div>
       </div>

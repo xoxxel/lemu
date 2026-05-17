@@ -26,6 +26,16 @@ const copyCommand: Command = {
   name: 'copy',
   description: 'Copy a file or directory',
   aliases: ['cp'],
+  usage: '/copy <source> <destination>',
+  examples: [
+    { input: '/copy file.ts file.backup.ts', description: 'Create a backup of a file' },
+    { input: '/cp package.json package.backup.json', description: 'Copy using alias' },
+  ],
+  edgeCases: [
+    { scenario: 'missing destination', input: '/copy file.ts', expected: 'Usage error' },
+    { scenario: 'source not found', input: '/copy nope.ts dest.ts', expected: 'error: ENOENT' },
+    { scenario: 'path traversal', input: '/copy ../../etc/passwd dest', expected: 'error: Path outside workspace' },
+  ],
   async execute(args) {
     const [src, dest] = args;
     try {

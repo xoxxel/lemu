@@ -254,6 +254,103 @@
   text-transform: uppercase;
 }
 
+.command-menu-item.cmd-help {
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+  padding-bottom: 8px;
+  cursor: default;
+  background: var(--bg-secondary);
+}
+
+.command-menu-item.cmd-help .cmd-usage {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.command-menu-item.cmd-help .cmd-desc {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.sidebar-commands-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.sidebar-command-item .cmd-name {
+  color: var(--accent);
+  font-size: 13px;
+}
+
+.sidebar-command-item .cmd-plugin {
+  display: block;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.sidebar-command-item:hover .cmd-plugin {
+  color: var(--text-secondary);
+}
+
+.contextual-help-separator {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+.contextual-help {
+  padding: 8px 16px;
+}
+
+.contextual-help-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.contextual-help-usage {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.contextual-help-name {
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.contextual-help-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.contextual-help-example {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: var(--bg-surface);
+  font-size: 12px;
+}
+
+.contextual-help-input {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.contextual-help-desc {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
 .input-bar {
   display: flex;
   align-items: center;
