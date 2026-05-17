@@ -353,7 +353,10 @@ export default function App() {
   }, []);
 
   return (
-    <div className="app" onClick={() => inputRef.current?.focus()}>
+    <div className="app" onClick={() => {
+      if (window.getSelection()?.toString()) return;
+      inputRef.current?.focus();
+    }}>
       <Sidebar
         cwd={cwd}
         recentFiles={recentFiles}
