@@ -2,8 +2,10 @@ import express from 'express';
 import cors from 'cors';
 import fs from 'fs-extra';
 import path from 'path';
+import http from 'http';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
+import { setupWebSocket } from './ws';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -198,7 +200,10 @@ app.get('/api/workspace', (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
+const server = http.createServer(app);
+setupWebSocket(server);
+
+server.listen(PORT, () => {
   console.log(`lemu server running on http://localhost:${PORT}`);
   console.log(`Workspace: ${WORKSPACE}`);
 });

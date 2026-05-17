@@ -24,3 +24,12 @@ export function parse(input: string): ParsedCommand | null {
 export function isCommandInput(input: string): boolean {
   return input.startsWith('/') || input.startsWith('!');
 }
+
+export function isSlashCommand(input: string): boolean {
+  return input.trim().startsWith('/');
+}
+
+export function isShellCommand(input: string): boolean {
+  const trimmed = input.trim();
+  return trimmed.length > 0 && !trimmed.startsWith('/') && !trimmed.startsWith('!');
+}
