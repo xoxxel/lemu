@@ -5,7 +5,7 @@ import { useCommandHistory } from './hooks/useCommandHistory';
 import { useAutocomplete } from './hooks/useAutocomplete';
 import { useTerminal } from './hooks/useTerminal';
 import type { Tab, TabType } from './core/tabs/types';
-import { createTabId, TAB_ICONS, createHomeTab, HOME_TAB_ID } from './core/tabs/types';
+import { createTabId, TAB_ICONS } from './core/tabs/types';
 import Sidebar from './components/Sidebar';
 import Workspace from './components/Workspace';
 import InputBar from './components/InputBar';
@@ -42,8 +42,8 @@ export interface Message {
 export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [cwd, setCwd] = useState('~');
-  const [tabs, setTabs] = useState<Tab[]>([createHomeTab()]);
-  const [activeTabId, setActiveTabId] = useState<string>(HOME_TAB_ID);
+  const [tabs, setTabs] = useState<Tab[]>([]);
+  const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [recentFiles, setRecentFiles] = useState<string[]>([]);
   const [activeTasks, setActiveTasks] = useState(0);
   const [inputValue, setInputValue] = useState('');
@@ -73,7 +73,7 @@ export default function App() {
       type,
       title,
       icon: TAB_ICONS[type],
-      closable: type !== 'home',
+      closable: true,
       path,
       state,
     };
@@ -86,17 +86,11 @@ export default function App() {
   }, []);
 
   const closeTab = useCallback((id: string) => {
-    if (id === HOME_TAB_ID) return;
     setTabs((prev) => {
       const idx = prev.findIndex((t) => t.id === id);
       const next = prev.filter((t) => t.id !== id);
       if (activeTabId === id) {
-        if (next.length > 0) {
-          const newIdx = Math.min(idx, next.length - 1);
-          setActiveTabId(next[newIdx].id);
-        } else {
-          setActiveTabId(HOME_TAB_ID);
-        }
+        setActiveTabId(next.length > 0 ? next[Math.min(idx, next.length - 1)].id : null);
       }
       return next;
     });
@@ -130,6 +124,7 @@ export default function App() {
       case 'search': return 'search';
       case 'task': return 'task';
       case 'shell': return 'shell';
+      case 'text': return 'text';
       default: return null;
     }
   }
@@ -157,6 +152,14 @@ export default function App() {
       }
       const result = await getRuntime().execute({ name: 'help', args: [topic], raw: trimmed });
       addMessage(result.success ? 'system' : 'error', result.message);
+      if (result.success && result.data && typeof result.data === 'object') {
+        const d = result.data as Record<string, unknown>;
+        const dType = d.type as string | undefined;
+        const tabType = dType ? viewTypeToTabType(dType) : null;
+        if (tabType) {
+          addTab(tabType, `help: ${topic}`, undefined, d);
+        }
+      }
       return;
     }
 
@@ -359,9 +362,7 @@ export default function App() {
         )}
         <Workspace
           ref={workspaceRef}
-          messages={messages}
           activeTab={activeTab}
-          tabs={tabs}
         />
         {terminal.sessions.length > 0 && (
           <div className={`terminal-panel ${terminalPanelOpen ? '' : 'collapsed'}`}>

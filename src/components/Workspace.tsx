@@ -1,11 +1,8 @@
 import { forwardRef } from 'react';
-import type { Message } from '../App';
 import type { Tab } from '../core/tabs/types';
 
 interface WorkspaceProps {
-  messages: Message[];
   activeTab: Tab | null;
-  tabs: Tab[];
 }
 
 function renderEditorContent(state: Record<string, unknown>) {
@@ -95,6 +92,12 @@ function renderAIContent(state: Record<string, unknown>) {
   );
 }
 
+function renderTextContent(state: Record<string, unknown>) {
+  const content = state.content as string;
+  if (!content) return <div className="empty-state">(no content)</div>;
+  return <pre className="file-content">{content}</pre>;
+}
+
 function renderAgentContent(state: Record<string, unknown>) {
   const content = state.content as string;
   const logs = state.logs as string[] | undefined;
@@ -113,73 +116,38 @@ function renderAgentContent(state: Record<string, unknown>) {
   );
 }
 
-function renderMessageLine(msg: Message) {
-  const body = msg.content.length > 200 ? msg.content.slice(0, 200) + '...' : msg.content;
-  return (
-    <div key={msg.id} className={`history-line ${msg.type}`}>
-      <span className="history-prefix">
-        {msg.type === 'user' ? '>' : msg.type === 'error' ? '!' : '\u2713'}
-      </span>
-      <span className="history-body">{body}</span>
-    </div>
-  );
-}
-
-function renderHomeContent(messages: Message[]) {
-  if (messages.length === 0) {
-    return (
-      <div className="welcome">
-        <div className="title">lemu</div>
-        <div className="subtitle">terminal workspace</div>
-        <div className="hint">
-          Type any command for the shell, <kbd>/</kbd> for internal commands, or <kbd>@command</kbd> for instant help
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div className="home-content">
-      <div className="home-header">
-        <span className="home-header-title">lemu</span>
-        <span className="home-header-history-count">{messages.length} command{messages.length !== 1 ? 's' : ''}</span>
-      </div>
-      <div className="home-history">{messages.map(renderMessageLine)}</div>
-    </div>
-  );
-}
-
-function renderTabContent(tab: Tab, messages: Message[]): JSX.Element | null {
+function renderTabContent(tab: Tab): JSX.Element | null {
   const state = tab.state as Record<string, unknown> | undefined;
-  if (!state && tab.type !== 'home') return null;
+  if (!state) return null;
 
   switch (tab.type) {
-    case 'home':
-      return renderHomeContent(messages);
     case 'editor':
-      return renderEditorContent(state!);
+      return renderEditorContent(state);
     case 'browser':
-      return renderBrowserContent(state!);
+      return renderBrowserContent(state);
     case 'search':
-      return renderSearchContent(state!);
+      return renderSearchContent(state);
     case 'task':
-      return renderTaskContent(state!);
+      return renderTaskContent(state);
     case 'shell':
-      return renderShellContent(state!);
+      return renderShellContent(state);
     case 'ai':
-      return renderAIContent(state!);
+      return renderAIContent(state);
     case 'agent':
-      return renderAgentContent(state!);
+      return renderAgentContent(state);
+    case 'text':
+      return renderTextContent(state);
     default:
       return <div className="empty-state">No content for this tab type.</div>;
   }
 }
 
 const Workspace = forwardRef<HTMLDivElement, WorkspaceProps>(
-  ({ messages, activeTab }: WorkspaceProps, ref) => {
+  ({ activeTab }: WorkspaceProps, ref) => {
     return (
       <div className="workspace" ref={ref}>
         <div className="workspace-tab-content">
-          {activeTab ? renderTabContent(activeTab, messages) : (
+          {activeTab ? renderTabContent(activeTab) : (
             <div className="welcome">
               <div className="title">lemu</div>
               <div className="subtitle">terminal workspace</div>

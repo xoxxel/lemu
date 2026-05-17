@@ -139,19 +139,22 @@ const helpCommand: Command = {
   ],
   async execute(args) {
     if (args.length === 0) {
-      return { success: true, message: formatOverview() };
+      const content = formatOverview();
+      return { success: true, message: content, data: { type: 'text', content } };
     }
 
     const topic = args.join(' ');
 
     const plugin = findPlugin(topic);
     if (plugin) {
-      return { success: true, message: formatPluginHelp(plugin) };
+      const content = formatPluginHelp(plugin);
+      return { success: true, message: content, data: { type: 'text', content } };
     }
 
     const cmd = findCommand(topic);
     if (cmd) {
-      return { success: true, message: formatCommandHelp(cmd) };
+      const content = formatCommandHelp(cmd);
+      return { success: true, message: content, data: { type: 'text', content } };
     }
 
     return {
