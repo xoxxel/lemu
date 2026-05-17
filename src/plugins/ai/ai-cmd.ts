@@ -1,5 +1,4 @@
-import type { Command, AutocompleteItem } from './types';
-import { registry } from './registry';
+import type { Command, AutocompleteItem } from '../../core/commands/types';
 
 const aiCommand: Command = {
   name: 'ai',
@@ -17,11 +16,11 @@ const aiCommand: Command = {
           config[ca.slice(0, eqIdx).trim()] = ca.slice(eqIdx + 1).trim();
         }
       }
-      const { configureAI } = await import('../ai');
+      const { configureAI } = await import('../../core/ai');
       return configureAI(config);
     }
 
-    const { askAI } = await import('../ai');
+    const { askAI } = await import('../../core/ai');
     const question = args.join(' ');
     const result = await askAI(question);
     return result;
@@ -46,4 +45,4 @@ const aiCommand: Command = {
   validate() { return null; },
 };
 
-registry.register(aiCommand);
+export default aiCommand;

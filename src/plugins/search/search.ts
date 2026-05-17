@@ -1,5 +1,4 @@
-import type { Command, AutocompleteItem } from './types';
-import { registry } from './registry';
+import type { Command, AutocompleteItem } from '../../core/commands/types';
 
 const api = {
   async search(pattern: string, dir?: string): Promise<{ file: string; line: number; content: string }[]> {
@@ -43,4 +42,4 @@ const searchCommand: Command = {
   },
 };
 
-registry.register(searchCommand);
+export default searchCommand;

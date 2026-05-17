@@ -1,5 +1,4 @@
-import type { Command, AutocompleteItem } from './types';
-import { registry } from './registry';
+import type { Command, AutocompleteItem } from '../../core/commands/types';
 
 const browserCommand: Command = {
   name: 'browser',
@@ -35,4 +34,4 @@ const browserCommand: Command = {
   },
 };
 
-registry.register(browserCommand);
+export default browserCommand;

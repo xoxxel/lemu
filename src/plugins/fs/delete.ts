@@ -1,5 +1,4 @@
-import type { Command, AutocompleteItem } from './types';
-import { registry } from './registry';
+import type { Command, AutocompleteItem } from '../../core/commands/types';
 
 const api = {
   async delete(path: string): Promise<void> {
@@ -58,4 +57,4 @@ const deleteCommand: Command = {
   },
 };
 
-registry.register(deleteCommand);
+export default deleteCommand;

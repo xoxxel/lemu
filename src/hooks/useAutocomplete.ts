@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { parse } from '../core/parser';
-import { executor } from '../core/executor';
+import { getRuntime } from '../core/runtime/instance';
 import { fuzzyMatch, sortByScore } from '../core/autocomplete';
 import { registry } from '../core/commands/registry';
 import type { AutocompleteItem } from '../core/commands/types';
@@ -35,7 +35,7 @@ export function useAutocomplete() {
       return;
     }
 
-    const items = await executor.getAutocomplete(parsed);
+    const items = await getRuntime().getAutocomplete(parsed);
     setSuggestions(items);
     setSelectedIndex(0);
   }, []);

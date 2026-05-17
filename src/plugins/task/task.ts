@@ -1,5 +1,4 @@
-import type { Command, AutocompleteItem } from './types';
-import { registry } from './registry';
+import type { Command, AutocompleteItem } from '../../core/commands/types';
 
 interface TaskItem {
   id: string;
@@ -71,4 +70,4 @@ const taskCommand: Command = {
   },
 };
 
-registry.register(taskCommand);
+export default taskCommand;

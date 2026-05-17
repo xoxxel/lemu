@@ -1,5 +1,4 @@
-import type { Command, AutocompleteItem } from './types';
-import { registry } from './registry';
+import type { Command, AutocompleteItem } from '../../core/commands/types';
 
 const agentCommand: Command = {
   name: 'agent',
@@ -9,7 +8,7 @@ const agentCommand: Command = {
     if (args.length === 0) return { success: false, message: 'Usage: /agent <task description>' };
 
     const task = args.join(' ');
-    const { runAgent } = await import('../ai');
+    const { runAgent } = await import('../../core/ai');
     return runAgent(task);
   },
   async autocomplete(args) {
@@ -25,4 +24,4 @@ const agentCommand: Command = {
   validate() { return null; },
 };
 
-registry.register(agentCommand);
+export default agentCommand;

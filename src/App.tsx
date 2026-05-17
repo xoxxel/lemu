@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { parse, isSlashCommand, isShellCommand } from './core/parser';
-import { executor } from './core/executor';
+import { getRuntime } from './core/runtime/instance';
 import { useCommandHistory } from './hooks/useCommandHistory';
 import { useAutocomplete } from './hooks/useAutocomplete';
 import { useTerminal, type SessionState, type WSMessage } from './hooks/useTerminal';
@@ -140,10 +140,15 @@ export default function App() {
     setInputValue('');
     clearAutocomplete();
 
+    console.log('[APP] handleSubmit input="%s"', trimmed);
+    console.log('[APP] isSlashCommand=%s isShellCommand=%s', isSlashCommand(trimmed), isShellCommand(trimmed));
+
     if (isSlashCommand(trimmed)) {
       addMessage('user', trimmed);
       const parsed = parse(trimmed);
+      console.log('[APP] parse result: %j', parsed);
       if (!parsed) {
+        console.log('[APP] Parse returned null for slash input!');
         addMessage('error', 'Invalid command syntax.');
         return;
       }
@@ -163,7 +168,16 @@ export default function App() {
         return;
       }
 
-      const result = await executor.execute(parsed);
+      console.log('[APP] Calling runtime.execute() for command: %s', parsed.name);
+      let result;
+      try {
+        result = await getRuntime().execute(parsed);
+        console.log('[APP] runtime.execute() result: success=%s message=%s', result.success, result.message?.slice(0, 120));
+      } catch (err) {
+        console.log('[APP] runtime.execute() THREW: %o', err);
+        addMessage('error', `Execution error: ${err instanceof Error ? err.message : String(err)}`);
+        return;
+      }
       addMessage(result.success ? 'system' : 'error', result.message, result.data);
 
       if (result.data && typeof result.data === 'object' && 'path' in result.data) {
@@ -179,8 +193,10 @@ export default function App() {
         setActiveTab(path);
       }
     } else if (isShellCommand(trimmed)) {
+      console.log('[APP] Routing to SHELL: %s', trimmed);
       handleShellCommand(trimmed);
     } else {
+      console.log('[APP] Input classified as NEITHER slash nor shell command: %s', trimmed);
       addMessage('user', trimmed);
       addMessage('error', 'Not a valid command. Type / for available commands.');
     }

@@ -1,5 +1,4 @@
-import type { Command, AutocompleteItem } from './types';
-import { registry } from './registry';
+import type { Command, AutocompleteItem } from '../../core/commands/types';
 
 const api = {
   async exec(command: string): Promise<{ stdout: string; stderr: string; code: number }> {
@@ -48,4 +47,4 @@ const gitCommand: Command = {
   },
 };
 
-registry.register(gitCommand);
+export default gitCommand;

@@ -1,9 +1,8 @@
-import type { Command, AutocompleteItem } from './types';
-import { registry } from './registry';
+import type { Command, AutocompleteItem } from '../../core/commands/types';
 
 const api = {
-  async copy(src: string, dest: string): Promise<void> {
-    const res = await fetch('/api/fs/copy', {
+  async move(src: string, dest: string): Promise<void> {
+    const res = await fetch('/api/fs/move', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ src, dest }),
@@ -23,17 +22,17 @@ const api = {
   },
 };
 
-const copyCommand: Command = {
-  name: 'copy',
-  description: 'Copy a file or directory',
-  aliases: ['cp'],
+const moveCommand: Command = {
+  name: 'move',
+  description: 'Move or rename a file/directory',
+  aliases: ['mv', 'rename'],
   async execute(args) {
     const [src, dest] = args;
     try {
-      await api.copy(src, dest);
-      return { success: true, message: `Copied ${src} → ${dest}` };
+      await api.move(src, dest);
+      return { success: true, message: `Moved ${src} → ${dest}` };
     } catch (err) {
-      return { success: false, message: `Failed to copy: ${err instanceof Error ? err.message : String(err)}` };
+      return { success: false, message: `Failed to move: ${err instanceof Error ? err.message : String(err)}` };
     }
   },
   async autocomplete(args) {
@@ -46,9 +45,9 @@ const copyCommand: Command = {
     return [];
   },
   validate(args) {
-    if (args.length < 2) return 'Usage: /copy <source> <destination>';
+    if (args.length < 2) return 'Usage: /move <source> <destination>';
     return null;
   },
 };
 
-registry.register(copyCommand);
+export default moveCommand;

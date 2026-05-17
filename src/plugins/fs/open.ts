@@ -1,5 +1,4 @@
-import type { Command, AutocompleteItem } from './types';
-import { registry } from './registry';
+import type { Command, AutocompleteItem } from '../../core/commands/types';
 
 const api = {
   async readFile(path: string): Promise<string> {
@@ -27,14 +26,17 @@ const openCommand: Command = {
   aliases: ['o', 'cat', 'view'],
   async execute(args) {
     const path = args[0];
+    console.log('[CMD_OPEN] execute() path=%s', path);
     try {
       const content = await api.readFile(path);
+      console.log('[CMD_OPEN] readFile success, content length=%d', content.length);
       return {
         success: true,
         message: `Opened ${path}`,
         data: { path, content, type: 'file' },
       };
     } catch (err) {
+      console.log('[CMD_OPEN] FAILED: %s', err instanceof Error ? err.message : String(err));
       return { success: false, message: `Failed to open ${path}: ${err instanceof Error ? err.message : String(err)}` };
     }
   },
@@ -51,4 +53,4 @@ const openCommand: Command = {
   },
 };
 
-registry.register(openCommand);
+export default openCommand;
