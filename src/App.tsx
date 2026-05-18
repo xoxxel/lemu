@@ -1,6 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { parse } from './core/parser';
+import { classifyInput } from './core/input-router';
 import { getRuntime } from './core/runtime/instance';
+import type { PluginInputResult } from './core/plugin-system/types';
 import { useCommandHistory } from './hooks/useCommandHistory';
 import { useAutocomplete } from './hooks/useAutocomplete';
 import { useTerminal } from './hooks/useTerminal';
@@ -173,19 +175,58 @@ export default function App() {
     setActiveTabId(id);
   }, []);
 
-  const handleSubmit = useCallback(async (input: string) => {
-    const trimmed = input.trim();
-    if (!trimmed) return;
+  const handleTabInput = useCallback(async (input: string, tab: Tab): Promise<void> => {
+    const runtime = getRuntime();
+    const plugin = runtime.pluginRegistry.getPluginByTabType(tab.type);
+    if (!plugin || !plugin.onInput) {
+      addMessage('user', input);
+      const label = runtime.viewMetaMap[tab.type]?.label ?? tab.type;
+      addMessage('error', `${label} does not accept direct input. Use : for terminal, / for commands, or > for actions.`);
+      runtime.feedback.show({
+        level: 'warning',
+        message: `'${label}' tab does not accept direct input`,
+        suggestion: 'Use : for terminal, / for commands, > for actions',
+        dismissible: true,
+      });
+      return;
+    }
+    addMessage('user', input);
+    const result: PluginInputResult | void = await runtime.processPluginInput({
+      input,
+      tabId: tab.id,
+      tabType: tab.type,
+      state: tab.state ?? {},
+    });
+    if (result) {
+      if (result.message) {
+        addMessage('system', result.message);
+      }
+      if (result.openTab) {
+        const ot = result.openTab;
+        const viewMeta = runtime.viewMetaMap;
+        const meta = viewMeta[ot.type];
+        addTab(ot.type, ot.title ?? meta?.label ?? ot.type, undefined, ot.state);
+      }
+      if (result.state) {
+        setTabs((prev) => prev.map((t) =>
+          t.id === tab.id ? { ...t, state: { ...t.state, ...result.state } } : t
+        ));
+      }
+    }
+  }, [addMessage, addTab]);
 
-    addHistory(trimmed);
+  const handleSubmit = useCallback(async (input: string) => {
+    const classified = classifyInput(input);
+    const { mode, input: routedInput, raw } = classified;
+    if (!routedInput && mode !== 'tab') return;
+
+    addHistory(raw);
     setInputValue('');
     clearAutocomplete();
 
-    // Plugin Action Mode: >action
-    if (trimmed.startsWith('>')) {
-      const actionQuery = trimmed.slice(1).trim();
-      if (!actionQuery) {
-        addMessage('user', trimmed);
+    if (mode === 'action') {
+      if (!routedInput) {
+        addMessage('user', raw);
         const actions = activeTab
           ? getRuntime().actionRegistry.getForType(activeTab.type)
           : [];
@@ -201,31 +242,31 @@ export default function App() {
         return;
       }
       if (!activeTab) {
-        addMessage('user', trimmed);
+        addMessage('user', raw);
         addMessage('error', 'No active tab. Open a file or view first.');
         return;
       }
       const runtime = getRuntime();
-      let action = runtime.actionRegistry.findByTypeAndId(activeTab.type, actionQuery);
+      let action = runtime.actionRegistry.findByTypeAndId(activeTab.type, routedInput);
       if (!action) {
         const allActions = runtime.actionRegistry.getForType(activeTab.type);
         action = allActions.find(a =>
-          a.aliases?.some(al => al.toLowerCase() === actionQuery.toLowerCase())
+          a.aliases?.some(al => al.toLowerCase() === routedInput.toLowerCase())
         );
       }
       if (!action) {
-        addMessage('user', trimmed);
-        addMessage('error', `No action '${actionQuery}' for ${activeTab.type}. Type > to list available actions.`);
+        addMessage('user', raw);
+        addMessage('error', `No action '${routedInput}' for ${activeTab.type}. Type > to list available actions.`);
         runtime.feedback.show({
           level: 'error',
-          message: `No action '${actionQuery}' for ${activeTab.type}`,
+          message: `No action '${routedInput}' for ${activeTab.type}`,
           suggestion: 'Type > to list available actions',
           dismissible: true,
         });
         return;
       }
       console.log('[ACTIONS] selected:', action.id);
-      addMessage('user', trimmed);
+      addMessage('user', raw);
       const ctx = {
         tabId: activeTab.id,
         tabType: activeTab.type,
@@ -245,30 +286,27 @@ export default function App() {
       return;
     }
 
-    // Help Mode: @topic
-    if (trimmed.startsWith('@')) {
-      addMessage('user', trimmed);
-      const topic = trimmed.slice(1).trim();
-      if (!topic) {
+    if (mode === 'help') {
+      addMessage('user', raw);
+      if (!routedInput) {
         addMessage('system', 'Usage: @<plugin|command> \u2014 e.g. @open, @search, @git');
         return;
       }
-      const result = await getRuntime().execute({ name: 'help', args: [topic], raw: trimmed });
+      const result = await getRuntime().execute({ name: 'help', args: [routedInput], raw });
       addMessage(result.success ? 'system' : 'error', result.message);
       if (result.success && result.data && typeof result.data === 'object') {
         const d = result.data as Record<string, unknown>;
         const dType = d.type as string | undefined;
         if (dType && getRuntime().viewComponentMap[dType]) {
-          addTab(dType, `help: ${topic}`, undefined, d);
+          addTab(dType, `help: ${routedInput}`, undefined, d);
         }
       }
       return;
     }
 
-    // Command Mode: /cmd or !cmd (rewritten to /run cmd)
-    if (trimmed.startsWith('/') || trimmed.startsWith('!')) {
-      const parsed = parse(trimmed);
-      addMessage('user', trimmed);
+    if (mode === 'command') {
+      const parsed = parse(routedInput);
+      addMessage('user', raw);
       if (!parsed) {
         addMessage('error', 'Invalid command syntax.');
         return;
@@ -308,9 +346,27 @@ export default function App() {
       return;
     }
 
-    // Terminal Mode (default): plain text -> shell
-    await handleShellCommand(trimmed);
-  }, [addHistory, addMessage, clearAutocomplete, terminal, handleShellCommand, addTab, activeTab, pinnedTabs, togglePinTab, handleTerminalCommand]);
+    if (mode === 'terminal') {
+      await handleShellCommand(routedInput);
+      return;
+    }
+
+    if (mode === 'tab') {
+      if (!activeTab) {
+        addMessage('user', raw);
+        addMessage('error', 'No active tab. Open a file or view first, or use : for terminal, / for commands, @ for help.');
+        getRuntime().feedback.show({
+          level: 'warning',
+          message: 'No active tab to receive input',
+          suggestion: 'Use / to open a file, : for terminal, or @ for help',
+          dismissible: true,
+        });
+        return;
+      }
+      await handleTabInput(routedInput, activeTab);
+      return;
+    }
+  }, [addHistory, addMessage, clearAutocomplete, terminal, handleShellCommand, addTab, activeTab, pinnedTabs, togglePinTab, handleTerminalCommand, handleTabInput]);
 
   const dismissFeedback = useCallback(() => {
     getRuntime().feedback.clear();
@@ -396,6 +452,12 @@ export default function App() {
     setTerminalPanelOpen((prev) => !prev);
   }, []);
 
+  const modeLabel = inputValue.trim().startsWith(':')
+    ? 'terminal'
+    : activeTab
+      ? (getRuntime().viewMetaMap[activeTab.type]?.label ?? activeTab.type)
+      : null;
+
   return (
     <div className="app" onClick={() => {
       if (window.getSelection()?.toString()) return;
@@ -452,6 +514,7 @@ export default function App() {
           suggestions={suggestions}
           selectedIndex={selectedIndex}
           hint={statusText}
+          modeLabel={modeLabel}
           onSuggestionClick={(idx) => {
             const selected = suggestions[idx];
             if (selected) {

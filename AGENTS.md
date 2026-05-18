@@ -17,15 +17,20 @@ No lint, typecheck, test, or formatter commands exist.
 
 ### Input Routing
 
+Input is classified by its first character by `src/core/input-router.ts`:
+
 | Input | Route |
 |-------|-------|
-| `/cmd args` | Runtime executor → command registry lookup |
+| `/cmd args` | `classifyInput()` → command mode → `runtime.execute()` → command registry |
 | `!cmd args` | Parser → `{ name: 'run', args: ['cmd args'] }` → plugin exec |
-| `@topic` | App.tsx → `runtime.execute({ name: 'help', args: [topic] })` |
-| `>action` | Plugin action on active tab via action registry |
-| `plain text` | WebSocket → PTY shell session |
+| `@topic` | Help mode → `runtime.execute({ name: 'help', args: [topic] })` |
+| `>action` | Action mode → plugin action on active tab via action registry |
+| `:cmd` | Terminal mode → strips `:` → PTY shell session |
+| `plain text` | Tab mode → active tab's plugin `onInput()` or feedback |
 
-Only `/terminal` is hardcoded in `App.tsx` (line 278). All other `/cmd` routes go through plugins.
+Only `/terminal` is hardcoded in `App.tsx` (for session management). All other `/cmd` routes go through plugins.
+
+Terminal is no longer the default input owner. The active workspace tab owns input by default. Terminal requires explicit `:` prefix.
 
 ### Plugin System
 
@@ -34,11 +39,13 @@ Commands live in `src/plugins/*/` and register via the `Plugin` interface (`src/
 Required:
 - `activate(ctx)` — register commands, actions, views via the context
 
-Optional lifecycle hooks: `deactivate(ctx)`, `onConfig(config)`, `onReady(ctx)`, `onAppRender(ctx)`, `onCommandExecuted(payload)`, `onCleanup()`
+Optional lifecycle hooks: `deactivate(ctx)`, `onConfig(config)`, `onReady(ctx)`, `onAppRender(ctx)`, `onCommandExecuted(payload)`, `onInput(payload)`, `onCleanup()`
 
-Optional properties: `commands`, `actions`, `views`, `docs`, `tabTypes`
+Optional properties: `commands`, `actions`, `views`, `docs`
 
 Views (`ctx.views.register(type, component, meta)`) create new tab types rendered via `runtime.viewComponentMap`. Actions (`ctx.actions.register(type, action)`) are invoked with `>action-name` when a matching tab is active.
+
+Plugins may implement `onInput(payload)` to accept direct input when their tab is active. If not implemented, the runtime shows feedback: "X does not accept direct input."
 
 Plugins are auto-discovered via `import.meta.glob('./plugins/*/index.ts', { eager: true })` in `src/main.tsx` — no manual registration needed.
 
@@ -47,11 +54,12 @@ Plugins are auto-discovered via `import.meta.glob('./plugins/*/index.ts', { eage
 - ARCHITECTURE.md describes an **outdated** command system (old `src/core/commands/` self-registration). The real system is the plugin architecture in `src/plugins/` + `src/core/plugin-system/`.
 - Server search (`/api/fs/search`) is pure Node.js walk + `String.includes()` — no `grep` dependency (contrary to ARCHITECTURE.md claims).
 - All state is in-memory. No persistence. Lost on page reload.
-- PTY sessions are lazy-created on first shell command (client-side `ensureSession()`). No session on WebSocket connect.
-- AI module is code-split (`dynamic import()` in ai-cmd and agent-cmd) — first use is slow.
+- PTY sessions are lazy-created on first shell command or `:` prefix (client-side `ensureSession()`). No session on WebSocket connect.
+- AI module is code-split (`dynamic import()` in ai-cmd, agent-cmd, and ai onInput) — first use is slow.
 - Filesystem endpoints validate paths via `path.resolve() + .startsWith(WORKSPACE)`.
 - Feedback system (`src/core/feedback/`) emits events via event bus; App.tsx shows them in a FeedbackBar.
 - Tab pinning keeps tabs visible in sidebar even when not active.
+- Mode indicator in InputBar shows `[terminal]` when input starts with `:`, otherwise shows active tab label.
 
 ### Adding a New Plugin
 

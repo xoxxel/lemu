@@ -9,5 +9,8 @@ export type {
   StorageService,
   CommandExecutedPayload,
   AppRenderContext,
+  PluginInputPayload,
+  PluginInputResult,
+  PluginView,
 } from './types';
 export { PluginRegistry, PluginLoader } from './plugin-loader';

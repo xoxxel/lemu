@@ -462,6 +462,18 @@
   font-size: 15px;
 }
 
+.input-bar .mode-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  user-select: none;
+  white-space: nowrap;
+  background: var(--bg-surface);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.03em;
+}
+
 .input-bar input {
   flex: 1;
   background: none;

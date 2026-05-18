@@ -9,10 +9,11 @@ interface InputBarProps {
   selectedIndex: number;
   onSuggestionClick: (index: number) => void;
   hint?: string | null;
+  modeLabel?: string | null;
 }
 
 const InputBar = forwardRef<HTMLInputElement, InputBarProps>(
-  ({ value, onChange, onKeyDown, suggestions, selectedIndex, onSuggestionClick, hint }, ref) => {
+  ({ value, onChange, onKeyDown, suggestions, selectedIndex, onSuggestionClick, hint, modeLabel }, ref) => {
     const menuRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -22,6 +23,8 @@ const InputBar = forwardRef<HTMLInputElement, InputBarProps>(
         child.scrollIntoView({ block: 'nearest' });
       }
     }, [selectedIndex]);
+
+    const promptChar = value.startsWith('/') || value.startsWith('!') ? '>' : value.startsWith('@') ? '@' : value.startsWith(':') ? ':' : '>';
 
     return (
       <div className="input-bar-container">
@@ -54,7 +57,10 @@ const InputBar = forwardRef<HTMLInputElement, InputBarProps>(
           </div>
         )}
         <div className="input-bar">
-          <span className="prompt">{value.startsWith('!') || value.startsWith('@') ? value[0] : '>'}</span>
+          <span className="prompt">{promptChar}</span>
+          {modeLabel && (
+            <span className="mode-label">{modeLabel}</span>
+          )}
           <input
             ref={ref}
             type="text"

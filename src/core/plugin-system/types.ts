@@ -13,6 +13,23 @@ export interface AppRenderContext {
   registerWrapper(wrapper: unknown): void;
 }
 
+export interface PluginInputPayload {
+  input: string;
+  tabId: string;
+  tabType: string;
+  state: Record<string, unknown>;
+}
+
+export interface PluginInputResult {
+  message?: string;
+  state?: Record<string, unknown>;
+  openTab?: {
+    type: string;
+    title?: string;
+    state: Record<string, unknown>;
+  };
+}
+
 export interface PluginDocs {
   overview: string;
   examples?: string;
@@ -41,8 +58,9 @@ export interface Plugin {
   views?: PluginView[];
   onConfig?(config: Record<string, unknown>): Promise<Record<string, unknown>>;
   onReady?(ctx: PluginContext): Promise<void>;
-  onCommandExecuted?(payload: CommandExecutedPayload): Promise<void>;
   onAppRender?(ctx: AppRenderContext): Promise<void>;
+  onCommandExecuted?(payload: CommandExecutedPayload): Promise<void>;
+  onInput?(payload: PluginInputPayload): Promise<PluginInputResult | void>;
   onCleanup?(): Promise<void>;
   docs?: PluginDocs;
 }

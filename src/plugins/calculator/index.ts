@@ -1,4 +1,4 @@
-import type { Plugin, PluginContext } from '../../core/plugin-system/types';
+import type { Plugin, PluginContext, PluginInputPayload, PluginInputResult } from '../../core/plugin-system/types';
 import type { PluginAction } from '../../core/actions/types';
 import type { Command } from '../../core/commands/types';
 import { CalculatorView } from './views/calculatorView';
@@ -183,6 +183,21 @@ export const calculatorPlugin: Plugin = {
 
   async activate(ctx: PluginContext) {
     ctx.feedback.info('Calculator plugin loaded. Type /calc <expression> to compute.');
+  },
+
+  async onInput(payload: PluginInputPayload): Promise<PluginInputResult | void> {
+    const expr = payload.input.trim();
+    if (!expr) return;
+    try {
+      const result = parseExpression(expr);
+      return {
+        message: `${expr} = ${result.formatted}`,
+        state: { expression: expr, steps: result.steps, final: result.final, formatted: result.formatted },
+      };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { message: `Invalid expression: ${msg}` };
+    }
   },
 
   async onReady() {

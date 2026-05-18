@@ -57,6 +57,8 @@ export function useAutocomplete(activeTabType: string | null) {
 
     setStatusText(null);
 
+    setStatusText(null);
+
     const parsed = parse(input);
     if (!parsed) {
       setSuggestions([]);

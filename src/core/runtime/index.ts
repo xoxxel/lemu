@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react';
 import { registry } from '../commands/registry';
-import { PluginRegistry, PluginLoader, type PluginContext, type AppRenderContext, type CommandExecutedPayload } from '../plugin-system';
+import { PluginRegistry, PluginLoader, type PluginContext, type AppRenderContext, type CommandExecutedPayload, type PluginInputPayload, type PluginInputResult } from '../plugin-system';
 import { eventBus } from '../events/event-bus';
 import { executor } from '../executor';
 import { ActionRegistry } from '../actions';
@@ -132,6 +132,7 @@ export interface Runtime {
   matchAction(query: string, action: PluginAction): boolean;
   execute(parsed: ParsedCommand): Promise<CommandResult>;
   getAutocomplete(parsed: ParsedCommand): ReturnType<typeof executor.getAutocomplete>;
+  processPluginInput(payload: PluginInputPayload): Promise<PluginInputResult | void>;
   init(plugins: import('../plugin-system/types').Plugin[]): Promise<void>;
   destroy(): Promise<void>;
 }
@@ -180,7 +181,14 @@ export async function createRuntime(): Promise<Runtime> {
     resolveActionsForTabType,
     matchAction,
 
-    async execute(parsed: ParsedCommand): Promise<CommandResult> {
+    async processPluginInput(payload: PluginInputPayload): Promise<PluginInputResult | void> {
+    const plugin = pluginRegistry.getPluginByTabType(payload.tabType);
+    if (!plugin || !plugin.onInput) return;
+    console.log('[RUNTIME] processPluginInput: tabType=%s input=%s', payload.tabType, payload.input);
+    return plugin.onInput(payload);
+  },
+
+  async execute(parsed: ParsedCommand): Promise<CommandResult> {
       console.log('[RUNTIME] execute() called: name=%s args=%j type=%s', parsed.name, parsed.args, 'command');
       const active = activePlugins();
       console.log('[RUNTIME] Active plugins: %d', active.length);

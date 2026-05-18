@@ -102,7 +102,7 @@ npm run build
 Plugins progress through these phases in order:
 
 ```
-onConfig → activate → onAppRender → onReady → [runtime:ready] → onCommandExecuted* → onCleanup → deactivate
+onConfig → activate → onAppRender → onReady → [runtime:ready] → onCommandExecuted* → onInput* → onCleanup → deactivate
 ```
 
 ### Phase Details
@@ -114,6 +114,7 @@ onConfig → activate → onAppRender → onReady → [runtime:ready] → onComm
 | `onAppRender` | After all plugins activated | Register React context wrappers around the app root | Once, after all `activate()` |
 | `onReady` | After `onAppRender` | Start background work, fetch data, set up subscriptions | Once, after all `onAppRender()` |
 | `onCommandExecuted` | After every command | Analytics, audit logs, cross-plugin reactions | Every command execution |
+| `onInput` | On tab input | When active tab receives direct input (no prefix) | Every default input submission |
 | `onCleanup` | On runtime destroy | Tear down subscriptions, workers, timers | Once, before `deactivate` |
 | `deactivate` | On runtime destroy | Unregister resources | Once, after `onCleanup` |
 
@@ -217,8 +218,6 @@ export const minimalPlugin: Plugin = {
     component: GreetView,
     meta: { label: 'Greeting', icon: '\u2728' },
   }],
-  tabTypes: ['greeting'],
-
   // Lifecycle hooks
   async activate(ctx: PluginContext) {
     // Commands, actions, and views declared above
@@ -287,48 +286,15 @@ interface Plugin {
   /** Commands registered by this plugin. Registered automatically
    * before activate() is called. */
   commands?: Command[];
-
-  /** Actions registered by this plugin. Registered automatically
-   * before activate() is called. */
   actions?: PluginAction[];
-
-  /** Dynamic action getter. Called lazily when autocomplete resolves
-   * actions for this plugin's tab types. Overrides `actions` if set. */
   getActions?(): PluginAction[];
-
-  /** View components registered by this plugin. Each view maps a
-   * tab type string to a React component. Registered automatically
-   * before activate() is called. */
   views?: PluginView[];
-
-  /** Tab type strings this plugin owns. Used to resolve `>` actions:
-   * when a tab of this type is active, the plugin's actions are shown
-   * in autocomplete. */
-  tabTypes?: string[];
-
-  /** Config transformer. Receives raw config, returns resolved config.
-   * Called before activate(). The resolved config is available at
-   * ctx.config during activate() and beyond. */
   onConfig?(config: Record<string, unknown>): Promise<Record<string, unknown>>;
-
-  /** Called after ALL plugins are activated and onAppRender completes.
-   * Use for data fetching, subscriptions, background work. */
   onReady?(ctx: PluginContext): Promise<void>;
-
-  /** Called after the app root DOM is mounted. Register React context
-   * wrappers here (e.g., ThemeProvider, QueryClient). */
   onAppRender?(ctx: AppRenderContext): Promise<void>;
-
-  /** Called after every command execution. Receives the command name,
-   * args, result, and duration. Use for analytics, audit, or
-   * cross-plugin reactions. */
   onCommandExecuted?(payload: CommandExecutedPayload): Promise<void>;
-
-  /** Called during runtime shutdown before deactivate. Clean up timers,
-   * event listeners, WebSocket connections, abort controllers. */
+  onInput?(payload: PluginInputPayload): Promise<PluginInputResult | void>;
   onCleanup?(): Promise<void>;
-
-  /** Documentation strings surfaced by /help and @help. */
   docs?: PluginDocs;
 }
 ```
@@ -387,6 +353,89 @@ interface AppRenderContext {
   registerWrapper(wrapper: unknown): void;
 }
 ```
+
+### PluginInputPayload
+
+```ts
+interface PluginInputPayload {
+  input: string;                              // The raw input text (prefix stripped)
+  tabId: string;                              // Active tab ID
+  tabType: string;                            // Active tab type (e.g., "calculator", "ai")
+  state: Record<string, unknown>;             // Current tab state
+}
+```
+
+### PluginInputResult
+
+```ts
+interface PluginInputResult {
+  message?: string;                           // Displayed as system message
+  state?: Record<string, unknown>;            // Merged into tab state (triggers re-render)
+  openTab?: {
+    type: string;                             // Tab type to open
+    title?: string;                           // Tab title
+    state: Record<string, unknown>;           // Initial tab state
+  };
+}
+```
+
+---
+
+## Active Tab Input
+
+The active workspace tab is the default owner of text input. Terminal is an explicit opt-in mode via the `:` prefix.
+
+### Input Routing
+
+When the user presses Enter, the runtime classifies the input by its first character:
+
+| Prefix | Mode | Destination |
+|--------|------|-------------|
+| `/` or `!` | Command | Command registry (`runtime.execute()`) |
+| `>` | Action | Plugin action registry (scoped to active tab type) |
+| `@` | Help | Help system (`/help <topic>`) |
+| `:` | Terminal | PTY shell session |
+| _(none)_ | Tab input | Active tab's plugin (`onInput()`) |
+
+### Implementing `onInput`
+
+If your plugin's tab is active and the user types plain text, the runtime calls `plugin.onInput(payload)`. Implement this hook to make your plugin interactive.
+
+**Calculator example** — accepts raw math expressions:
+
+```ts
+async onInput(payload: PluginInputPayload): Promise<PluginInputResult | void> {
+  const expr = payload.input.trim();
+  if (!expr) return;
+  const result = evaluate(expr);  // your evaluation logic
+  return {
+    message: `${expr} = ${result.formatted}`,
+    state: { expression: expr, final: result.final, formatted: result.formatted },
+  };
+}
+```
+
+**AI Chat example** — accepts raw questions:
+
+```ts
+async onInput(payload: PluginInputPayload): Promise<PluginInputResult | void> {
+  const input = payload.input.trim();
+  if (!input) return;
+  if (payload.tabType === 'agent') {
+    const result = await runAgent(input);
+    return { message: result.message, state: result.data ?? {} };
+  }
+  const result = await askAI(input);
+  return { message: result.message, state: result.data ?? {} };
+}
+```
+
+### Behavior Rules
+
+- If the active tab's plugin has no `onInput`, the runtime shows a feedback message: "X does not accept direct input. Use : for terminal, / for commands, or > for actions."
+- If there is no active tab, the runtime shows: "No active tab to receive input."
+- `onInput` is optional. Most plugins (file viewer, browser, search, etc.) do not implement it.
+- The `state` returned from `onInput` is shallow-merged into the tab's existing state, triggering a re-render of the view component.
 
 ---
 
@@ -489,7 +538,7 @@ The `>` prefix triggers plugin-scoped action mode. Unlike commands (which are gl
 ### How It Works
 
 1. A tab is active with type `editor`, `browser`, `search`, etc.
-2. The runtime looks up which plugin owns that tab type via `tabTypes`.
+2. The runtime looks up which plugin owns that tab type via the plugin's `views` array.
 3. Typing `>` triggers autocomplete showing that plugin's actions.
 4. Selecting an action or typing `>action-id` executes the action handler.
 
@@ -570,7 +619,7 @@ Views are React components that render tab content. Each tab has a `type` string
 
 1. Create a React component that accepts `{ state: Record<string, unknown> }`.
 2. Add it to the plugin's `views` array with a unique `type` string.
-3. Add the `type` string to the plugin's `tabTypes` array.
+3. The `type` string is automatically used for tab-type resolution — no separate `tabTypes` declaration needed.
 
 ```ts
 import MyView from './views/MyView';
@@ -582,7 +631,6 @@ export const myPlugin: Plugin = {
     component: MyView,
     meta: { label: 'My View', icon: '\u2728' },
   }],
-  tabTypes: ['my-view'],
 };
 ```
 
@@ -906,6 +954,7 @@ interface Runtime {
   viewMetaMap: Record<string, { label: string; icon: string }>;
   execute(parsed: ParsedCommand): Promise<CommandResult>;
   getAutocomplete(parsed: ParsedCommand): Promise<AutocompleteItem[]>;
+  processPluginInput(payload: PluginInputPayload): Promise<PluginInputResult | void>;
   init(plugins: Plugin[]): Promise<void>;
   destroy(): Promise<void>;
   resolveActionsForTabType(tabType: string | null): PluginAction[] | null;
@@ -1163,7 +1212,8 @@ Everything else — commands, views, actions, help — comes from plugins.
 
 ### What Remains in Core
 
-- `App.tsx` — Top-level UI shell. Hardcodes `/terminal` routing (PTY requirement).
+- `App.tsx` — Top-level UI shell. Hardcodes `/terminal` routing (PTY requirement). Uses `classifyInput()` from the input router.
+- `core/input-router.ts` — Centralized input routing logic. Classifies input by prefix and returns the target mode.
 - `Workspace.tsx` — Tab content renderer. Reads `viewComponentMap` from runtime.
 - `Sidebar.tsx` — Tab list with pin/unpin. Plugin-agnostic.
 - `InputBar.tsx` — Command input with autocomplete. Plugin-agnostic.
@@ -1173,7 +1223,9 @@ Everything else — commands, views, actions, help — comes from plugins.
 
 ### Remaining Architectural Limitations
 
-1. **`/terminal` is hardcoded in App.tsx** — The PTY terminal command cannot be a plugin because it requires special UI handling (TerminalTabBar, WebSocket session). This is a core concern.
+1. **Input routing is centralized** — All input (commands, actions, help, terminal, tab input) is routed through `src/core/input-router.ts` via `classifyInput()`. Terminal is no longer the default — it requires the `:` prefix.
+
+2. **`/terminal` is hardcoded in App.tsx** — The PTY terminal command cannot be a plugin because it requires special UI handling (TerminalTabBar, WebSocket session). This is a core concern.
 
 2. **View components are colocated with old views directory** — Individual `.tsx` view components (`EditorView`, `BrowserView`, etc.) are still in `src/views/`. They are imported by their respective plugins. This is not a coupling issue but a naming artifact.
 

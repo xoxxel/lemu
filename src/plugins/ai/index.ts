@@ -1,4 +1,4 @@
-import type { Plugin, PluginContext } from '../../core/plugin-system/types';
+import type { Plugin, PluginContext, PluginInputPayload, PluginInputResult } from '../../core/plugin-system/types';
 import aiCommand from './ai-cmd';
 import agentCommand from './agent-cmd';
 import { AIChatView } from './AIChatView';
@@ -29,6 +29,21 @@ export const aiPlugin: Plugin = {
     tips:  '  Configure early in your session so AI is ready when needed.\n  The agent can modify files — it runs shell commands autonomously.\n  Use /ai for quick questions; /agent for multi-step tasks.\n  The agent has up to 25 tool-calling iterations.',
     limitations: '  Requires an external API key (no built-in LLM).\n  AI module is code-split — first command is slow (dynamic import).\n  Agent is autonomous with no human-in-the-loop approval.\n  Max 25 iterations per agent run.',
   },
+  async onInput(payload: PluginInputPayload): Promise<PluginInputResult | void> {
+    const input = payload.input.trim();
+    if (!input) return;
+
+    if (payload.tabType === 'agent') {
+      const { runAgent } = await import('../../core/ai');
+      const result = await runAgent(input);
+      return { message: result.message, state: (result.data as Record<string, unknown>) ?? {} };
+    }
+
+    const { askAI } = await import('../../core/ai');
+    const result = await askAI(input);
+    return { message: result.message, state: (result.data as Record<string, unknown>) ?? {} };
+  },
+
   async activate(ctx: PluginContext) {
     for (const cmd of this.commands!) {
       ctx.commands.register(cmd);
