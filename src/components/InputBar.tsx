@@ -1,4 +1,4 @@
-import { forwardRef } from 'react';
+import { forwardRef, useRef, useEffect } from 'react';
 import type { AutocompleteItem } from '../core/commands/types';
 
 interface InputBarProps {
@@ -13,10 +13,20 @@ interface InputBarProps {
 
 const InputBar = forwardRef<HTMLInputElement, InputBarProps>(
   ({ value, onChange, onKeyDown, suggestions, selectedIndex, onSuggestionClick, hint }, ref) => {
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+      if (!menuRef.current || selectedIndex < 0) return;
+      const child = menuRef.current.children[selectedIndex] as HTMLElement | undefined;
+      if (child) {
+        child.scrollIntoView({ block: 'nearest' });
+      }
+    }, [selectedIndex]);
+
     return (
       <div className="input-bar-container">
         {suggestions.length > 0 && (
-          <div className="command-menu">
+          <div ref={menuRef} className="command-menu">
             {suggestions.map((item, idx) => (
               <div
                 key={item.value}
