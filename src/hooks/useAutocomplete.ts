@@ -18,20 +18,15 @@ export function useAutocomplete(activeTabType: string | null) {
       const matchAction = runtime.matchAction;
       const actions = resolveActionsForTabType(activeTabType);
       if (actions === null) {
-        console.log('[ACTIONS] no active plugin for tab type:', activeTabType);
         setSuggestions([]);
         setStatusText('No active plugin tab');
         return;
       }
       if (actions.length === 0) {
-        console.log('[ACTIONS] plugin has no actions for tab type:', activeTabType);
         setSuggestions([]);
         setStatusText('No actions available');
         return;
       }
-      console.log('[ACTIONS] active plugin tab type:', activeTabType);
-      console.log('[ACTIONS] resolved', actions.length, 'actions');
-      console.log('[ACTIONS] autocomplete query:', JSON.stringify(query));
 
       const matched = query
         ? actions.filter(a => matchAction(query, a))
@@ -49,15 +44,30 @@ export function useAutocomplete(activeTabType: string | null) {
       return;
     }
 
+    if (input.startsWith('@')) {
+      const query = input.slice(1).trim();
+      const allCommands = registry.getAll().map((c) => ({
+        value: `@${c.name}`,
+        description: c.description,
+        type: 'command' as const,
+      }));
+
+      const matched = query
+        ? fuzzyMatch(query, allCommands)
+        : allCommands;
+      const sorted = query ? sortByScore(query, matched) : matched;
+
+      setSuggestions(sorted);
+      setStatusText(null);
+      setSelectedIndex(0);
+      return;
+    }
+
     if (!input.startsWith('/')) {
       setSuggestions([]);
       setStatusText(null);
       return;
     }
-
-    setStatusText(null);
-
-    setStatusText(null);
 
     const parsed = parse(input);
     if (!parsed) {

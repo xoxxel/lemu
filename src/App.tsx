@@ -3,6 +3,7 @@ import { parse } from './core/parser';
 import { classifyInput } from './core/input-router';
 import { getRuntime } from './core/runtime/instance';
 import type { PluginInputResult } from './core/plugin-system/types';
+import { registry } from './core/commands/registry';
 import { useCommandHistory } from './hooks/useCommandHistory';
 import { useAutocomplete } from './hooks/useAutocomplete';
 import { useTerminal } from './hooks/useTerminal';
@@ -22,6 +23,9 @@ import './styles/app.css';
 
 function applyAutocomplete(input: string, selected: string): string {
   const trimmed = input.trim();
+  if (trimmed.startsWith('@') || trimmed.startsWith('>')) {
+    return selected + ' ';
+  }
   const parsed = parse(trimmed);
   if (parsed && parsed.args.length > 0) {
     const cmdPrefix = '/' + parsed.name + ' ';
@@ -378,7 +382,7 @@ export default function App() {
     if (getRuntime().feedback.currentFeedback) {
       getRuntime().feedback.clear();
     }
-    if (value.startsWith('/') || value.startsWith('>')) {
+    if (value.startsWith('/') || value.startsWith('>') || value.startsWith('@')) {
       updateAutocomplete(value);
     } else {
       clearAutocomplete();
