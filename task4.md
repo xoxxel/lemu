@@ -3,3 +3,4 @@
 [X]delete
 [x]calculatorView
 []browser
+[X]move
