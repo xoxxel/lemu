@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { eventBus } from '../../../core/events';
 
 interface CalcStep {
   expr: string;
@@ -73,6 +74,15 @@ export function CalculatorView({ state }: { state: Record<string, unknown> }) {
     });
   }, [s.expression, s.final]);
 
+  // Listen for clear events
+  useEffect(() => {
+    const unsub = eventBus.on('calculator:clear', () => {
+      setHistory([]);
+      setAnimated(false);
+    });
+    return unsub;
+  }, []);
+
   const current = history[history.length - 1];
 
   if (!current) {
@@ -102,10 +112,8 @@ export function CalculatorView({ state }: { state: Record<string, unknown> }) {
 
   return (
     <div style={{
-      padding: '32px 40px 48px',
-      maxWidth: 760,
-      margin: '0 auto',
-      fontFamily: 'var(--font-sans)',
+      padding: '24px 32px 48px',
+      fontFamily: 'var(--font-mono)',
     }}>
 
       {/* ── Big result display ────────────────────────────────────── */}
@@ -113,8 +121,8 @@ export function CalculatorView({ state }: { state: Record<string, unknown> }) {
         background: 'var(--color-background-secondary)',
         borderRadius: 'var(--border-radius-lg)',
         border: '0.5px solid var(--color-border-tertiary)',
-        padding: '32px 40px',
-        marginBottom: 32,
+        padding: '28px 32px',
+        marginBottom: 28,
         position: 'relative',
         overflow: 'hidden',
       }}>
@@ -124,12 +132,12 @@ export function CalculatorView({ state }: { state: Record<string, unknown> }) {
           flexWrap: 'wrap',
           gap: 4,
           alignItems: 'baseline',
-          marginBottom: 20,
+          marginBottom: 16,
         }}>
           {tokens.map((tok, i) => (
             <span key={i} style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: 18,
+              fontSize: 16,
               fontWeight: tok.type === 'op' ? 400 : 500,
               color: tok.type === 'op' ? 'var(--color-text-secondary)'
                 : tok.type === 'fn' ? '#185FA5'
@@ -142,7 +150,7 @@ export function CalculatorView({ state }: { state: Record<string, unknown> }) {
           ))}
           <span style={{
             fontFamily: 'var(--font-mono)',
-            fontSize: 18,
+            fontSize: 16,
             color: 'var(--color-text-tertiary)',
             marginLeft: 4,
           }}>=</span>
@@ -151,11 +159,11 @@ export function CalculatorView({ state }: { state: Record<string, unknown> }) {
         {/* Big number */}
         <div ref={resultRef} style={{
           fontFamily: 'var(--font-mono)',
-          fontSize: current.formatted.length > 16 ? 36 : current.formatted.length > 10 ? 48 : 64,
+          fontSize: current.formatted.length > 16 ? 32 : current.formatted.length > 10 ? 40 : 52,
           fontWeight: 500,
           color: 'var(--color-text-primary)',
           letterSpacing: '-0.02em',
-          lineHeight: 1,
+          lineHeight: 1.15,
           opacity: animated ? 1 : 0,
           transform: animated ? 'translateY(0)' : 'translateY(12px)',
           transition: 'opacity 0.4s ease, transform 0.4s ease',
@@ -178,15 +186,15 @@ export function CalculatorView({ state }: { state: Record<string, unknown> }) {
 
       {/* ── Computation breakdown ─────────────────────────────────── */}
       {current.steps.length > 0 && (
-        <div style={{ marginBottom: 32 }}>
+        <div style={{ marginBottom: 28 }}>
           <p style={{
             fontSize: 11,
             fontWeight: 500,
             textTransform: 'uppercase',
             letterSpacing: '0.1em',
             color: 'var(--color-text-tertiary)',
-            margin: '0 0 16px',
-          }}>Computation steps</p>
+            margin: '0 0 12px',
+          }}>Steps</p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             {current.steps.map((step, i) => (
@@ -218,19 +226,18 @@ export function CalculatorView({ state }: { state: Record<string, unknown> }) {
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   flex: 1,
-                  padding: '8px 0 8px 12px',
-                  borderBottom: i < current.steps.length - 1 ? 'none' : 'none',
+                  padding: '6px 0 6px 12px',
                 }}>
                   <span style={{
                     fontFamily: 'var(--font-mono)',
-                    fontSize: 14,
+                    fontSize: 13,
                     color: 'var(--color-text-secondary)',
                   }}>
                     {step.expr}
                   </span>
                   <span style={{
                     fontFamily: 'var(--font-mono)',
-                    fontSize: 15,
+                    fontSize: 14,
                     fontWeight: 500,
                     color: 'var(--color-text-primary)',
                     background: 'var(--color-background-secondary)',
@@ -261,12 +268,12 @@ export function CalculatorView({ state }: { state: Record<string, unknown> }) {
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 flex: 1,
-                padding: '8px 0 8px 12px',
+                padding: '6px 0 6px 12px',
               }}>
-                <span style={{ fontSize: 13, color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }}>result</span>
+                <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }}>result</span>
                 <span style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: 15,
+                  fontSize: 14,
                   fontWeight: 500,
                   color: 'var(--color-text-success)',
                   background: 'var(--color-background-success)',
@@ -290,7 +297,7 @@ export function CalculatorView({ state }: { state: Record<string, unknown> }) {
             textTransform: 'uppercase',
             letterSpacing: '0.1em',
             color: 'var(--color-text-tertiary)',
-            margin: '0 0 16px',
+            margin: '0 0 12px',
           }}>History</p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

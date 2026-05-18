@@ -1,6 +1,7 @@
 import type { Plugin, PluginContext, PluginInputPayload, PluginInputResult } from '../../core/plugin-system/types';
 import type { PluginAction } from '../../core/actions/types';
 import type { Command } from '../../core/commands/types';
+import { eventBus } from '../../core/events';
 import { CalculatorView } from './views/calculatorView';
 
 // ─── Utility: Safe math evaluator ────────────────────────────────────────────
@@ -148,7 +149,10 @@ const clearAction: PluginAction = {
   id: 'clear',
   title: 'Clear history',
   description: 'Clear the calculation history',
-  handler: async () => 'Calculation history cleared.',
+  handler: async () => {
+    eventBus.emit('calculator:clear', {});
+    return 'Calculation history cleared.';
+  },
 };
 
 const copyAction: PluginAction = {
@@ -158,7 +162,16 @@ const copyAction: PluginAction = {
   handler: async (ctx) => {
     const last = ctx.tabState?.formatted as string | undefined;
     if (!last) return 'No result to copy.';
-    return `Copied ${last} to clipboard.`;
+    try {
+      const text = ctx.tabState?.expression
+        ? `${ctx.tabState.expression} = ${last}`
+        : last;
+      await navigator.clipboard.writeText(text);
+      eventBus.emit('feedback', { level: 'success', message: `Copied ${last} to clipboard.`, dismissible: true });
+      return `Copied ${last} to clipboard.`;
+    } catch {
+      return 'Failed to copy to clipboard.';
+    }
   },
 };
 
@@ -186,8 +199,15 @@ export const calculatorPlugin: Plugin = {
   },
 
   async onInput(payload: PluginInputPayload): Promise<PluginInputResult | void> {
-    const expr = payload.input.trim();
-    if (!expr) return;
+    const raw = payload.input.trim();
+    if (!raw) return;
+
+    const operators = ['+', '-', '*', '/', '%', '^', '×', '÷'];
+    const prevFinal = payload.state?.final as number | undefined;
+    const expr = prevFinal !== undefined && operators.some(op => raw.startsWith(op))
+      ? String(prevFinal) + raw
+      : raw;
+
     try {
       const result = parseExpression(expr);
       return {
