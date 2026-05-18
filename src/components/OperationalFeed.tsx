@@ -1,3 +1,4 @@
+import { forwardRef, useImperativeHandle } from 'react';
 import { useRuntimeEvents, type Operation } from '../hooks/useRuntimeEvents';
 
 function FeedEntry({ op, onDismiss }: { op: Operation; onDismiss: (id: string) => void }) {
@@ -11,8 +12,10 @@ function FeedEntry({ op, onDismiss }: { op: Operation; onDismiss: (id: string) =
   );
 }
 
-export function OperationalFeed() {
-  const { operations, dismiss } = useRuntimeEvents();
+export const OperationalFeed = forwardRef<{ clearAll: () => void }, {}>(function OperationalFeed(_props, ref) {
+  const { operations, dismiss, clearAll } = useRuntimeEvents();
+
+  useImperativeHandle(ref, () => ({ clearAll }));
 
   if (operations.length === 0) return null;
 
@@ -23,4 +26,4 @@ export function OperationalFeed() {
       ))}
     </div>
   );
-}
+});

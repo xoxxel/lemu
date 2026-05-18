@@ -65,9 +65,6 @@ export function useRuntimeEvents() {
       const op: Operation = { id, message, kind: 'success' };
 
       setOperations((prev) => [...prev, op]);
-      setTimeout(() => {
-        setOperations((prev) => prev.filter((o) => o.id !== id));
-      }, 3000);
     };
 
     const watchedTypes: readonly string[] = [
@@ -84,5 +81,9 @@ export function useRuntimeEvents() {
     };
   }, []);
 
-  return { operations, dismiss };
+  const clearAll = useCallback(() => {
+    setOperations([]);
+  }, []);
+
+  return { operations, dismiss, clearAll };
 }

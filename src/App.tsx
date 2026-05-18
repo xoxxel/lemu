@@ -58,6 +58,7 @@ export default function App() {
   const [recentFiles, setRecentFiles] = useState<string[]>([]);
   const [activeTasks, setActiveTasks] = useState(0);
   const [inputValue, setInputValue] = useState('');
+  const feedRef = useRef<{ clearAll: () => void }>(null);
   const [terminalPanelOpen, setTerminalPanelOpen] = useState(false);
   const [pinnedTabs, setPinnedTabs] = useState<Set<string>>(new Set());
   const [feedback, setFeedback] = useState<FeedbackEvent | null>(null);
@@ -380,6 +381,7 @@ export default function App() {
 
   const handleInputChange = useCallback((value: string) => {
     setInputValue(value);
+    feedRef.current?.clearAll();
     if (getRuntime().feedback.currentFeedback) {
       getRuntime().feedback.clear();
     }
@@ -512,7 +514,7 @@ export default function App() {
           </div>
         )}
         <FeedbackBar feedback={feedback} onDismiss={dismissFeedback} />
-        <OperationalFeed />
+        <OperationalFeed ref={feedRef} />
         <InputBar
           ref={inputRef}
           value={inputValue}
