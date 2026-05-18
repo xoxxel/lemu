@@ -1027,4 +1027,121 @@
   padding: 4px 8px;
 }
 
+.git-view {
+  padding: 12px 16px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.git-command-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  margin-bottom: 12px;
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.git-prompt {
+  color: var(--green);
+  font-weight: 500;
+}
+
+.diff-view {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.diff-file-block {
+  border: 0.5px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+.diff-file-header {
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border-bottom: 0.5px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.diff-hunk-block {
+  border-bottom: 0.5px solid var(--border);
+}
+
+.diff-hunk-block:last-child {
+  border-bottom: none;
+}
+
+.diff-hunk-header {
+  padding: 4px 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-surface);
+  border-bottom: 0.5px solid var(--border);
+}
+
+.diff-line {
+  display: flex;
+  align-items: stretch;
+  padding: 0;
+  min-height: 20px;
+}
+
+.diff-gutter {
+  width: 24px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 11px;
+  padding-top: 1px;
+  user-select: none;
+  color: var(--text-muted);
+}
+
+.diff-text {
+  flex: 1;
+  white-space: pre-wrap;
+  word-break: break-all;
+  padding: 0 8px 0 4px;
+}
+
+.diff-added .diff-text {
+  color: var(--green);
+}
+
+.diff-added {
+  background: rgba(79, 207, 111, 0.06);
+  border-left: 2px solid rgba(79, 207, 111, 0.35);
+}
+
+.diff-removed .diff-text {
+  color: var(--red);
+}
+
+.diff-removed {
+  background: rgba(255, 79, 79, 0.06);
+  border-left: 2px solid rgba(255, 79, 79, 0.35);
+}
+
+.diff-context .diff-text {
+  color: var(--text-secondary);
+}
+
+.diff-context {
+  border-left: 2px solid transparent;
+}
+
 

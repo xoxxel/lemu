@@ -1,26 +1,19 @@
+import { parseDiff, type DiffData } from './diff-parser';
+import { DiffFileBlock } from './DiffView';
+
 interface GitData {
   command: string;
   stdout: string;
   stderr: string;
 }
 
-export function GitView({ state }: { state: Record<string, unknown> }) {
-  const data = state as unknown as GitData;
+function isDiffOutput(stdout: string): boolean {
+  return stdout.startsWith('diff --git') || stdout.includes('\ndiff --git');
+}
 
+function PlainOutput({ data }: { data: GitData }) {
   return (
-    <div style={{ padding: 16, fontFamily: 'var(--font-mono)', fontSize: 13 }}>
-      {data.command && (
-        <div style={{
-          padding: '6px 12px',
-          marginBottom: 12,
-          borderRadius: 6,
-          background: 'var(--color-background-secondary)',
-          color: 'var(--color-text-secondary)',
-          fontSize: 12,
-        }}>
-          $ git {data.command}
-        </div>
-      )}
+    <>
       {data.stdout && (
         <pre style={{
           margin: 0,
@@ -43,6 +36,34 @@ export function GitView({ state }: { state: Record<string, unknown> }) {
           color: 'var(--color-text-error)',
         }}>{data.stderr}</pre>
       )}
+    </>
+  );
+}
+
+function DiffOutput({ diff }: { diff: DiffData }) {
+  return (
+    <div className="diff-view">
+      {diff.files.map((file, i) => (
+        <DiffFileBlock key={i} file={file} />
+      ))}
+    </div>
+  );
+}
+
+export function GitView({ state }: { state: Record<string, unknown> }) {
+  const data = state as unknown as GitData;
+
+  const diff = data.stdout ? parseDiff(data.stdout) : null;
+
+  return (
+    <div className="git-view">
+      {data.command && (
+        <div className="git-command-line">
+          <span className="git-prompt">$</span>
+          <span> git {data.command}</span>
+        </div>
+      )}
+      {diff ? <DiffOutput diff={diff} /> : <PlainOutput data={data} />}
     </div>
   );
 }
