@@ -1,7 +1,7 @@
 import type { Plugin, PluginContext, CommandExecutedPayload } from '../../core/plugin-system/types';
 import { standardActions } from '../../core/actions';
 import { eventBus } from '../../core/events';
-import type { FsCopyEvent, FsMoveEvent, FsDeleteEvent, FsOpenEvent } from './events';
+import type { FsCopyEvent, FsMoveEvent, FsDeleteEvent, FsOpenEvent, FsErrorEvent } from './events';
 import openCommand from './open';
 import copyCommand from './copy';
 import moveCommand from './move';
@@ -61,12 +61,28 @@ export const fsPlugin: Plugin = {
     }
 
     if (command === 'delete') {
-      eventBus.emit('fs:delete', {
-        timestamp: Date.now(),
-        path: args[0],
-        success: result.success,
-        error: result.success ? undefined : result.message,
-      } as FsDeleteEvent);
+      const cleanPath = (result.data as Record<string, unknown> | undefined)?.path as string | undefined
+        || args.filter(a => !a.startsWith('-'))[0]
+        || args[0];
+      const name = cleanPath.split('/').pop() || cleanPath;
+
+      if (result.success) {
+        const kind = (result.data as Record<string, unknown> | undefined)?.kind as string | undefined || 'file';
+        eventBus.emit('fs:delete', {
+          timestamp: Date.now(),
+          path: cleanPath,
+          name,
+          kind: kind as 'file' | 'directory',
+          success: true,
+        } as FsDeleteEvent);
+      } else {
+        eventBus.emit('fs:error', {
+          timestamp: Date.now(),
+          operation: 'delete',
+          path: cleanPath,
+          message: result.message,
+        } as FsErrorEvent);
+      }
       return;
     }
 

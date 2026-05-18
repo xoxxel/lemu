@@ -1,7 +1,7 @@
 import type { Command, AutocompleteItem } from '../../core/commands/types';
 
 const api = {
-  async delete(path: string): Promise<void> {
+  async delete(path: string): Promise<{ kind: string }> {
     const res = await fetch('/api/fs/delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -9,6 +9,7 @@ const api = {
     });
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
+    return { kind: data.kind };
   },
   async listFiles(dir?: string): Promise<AutocompleteItem[]> {
     const params = dir ? `?dir=${encodeURIComponent(dir)}` : '';
@@ -49,8 +50,8 @@ const deleteCommand: Command = {
     }
     try {
       const cleanArgs = args.filter((a) => a !== '-f' && a !== '--force');
-      await api.delete(cleanArgs[0]);
-      return { success: true, message: `Deleted ${path}` };
+      const { kind } = await api.delete(cleanArgs[0]);
+      return { success: true, message: `Deleted ${path}`, data: { path: cleanArgs[0], kind } };
     } catch (err) {
       return { success: false, message: `Failed to delete: ${err instanceof Error ? err.message : String(err)}` };
     }
@@ -58,8 +59,10 @@ const deleteCommand: Command = {
   async autocomplete(args) {
     const clean = args.filter((a) => !a.startsWith('-'));
     if (clean.length === 0) return api.listFiles();
-    const prefix = clean[0];
-    const items = await api.listFiles();
+    const raw = clean[0];
+    const dir = raw.includes('/') ? raw.split('/').slice(0, -1).join('/') || '.' : '.';
+    const prefix = raw.split('/').pop() || '';
+    const items = await api.listFiles(dir);
     return items.filter((i) => i.value.startsWith(prefix));
   },
   validate(args) {

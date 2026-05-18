@@ -105,8 +105,10 @@ app.post('/api/fs/delete', async (req, res) => {
       return res.json({ success: false, error: 'Path outside workspace' });
     }
 
+    const stat = await fs.stat(target);
+    const kind = stat.isDirectory() ? 'directory' : 'file';
     await fs.remove(target);
-    res.json({ success: true });
+    res.json({ success: true, kind });
   } catch (err) {
     res.json({ success: false, error: (err as Error).message });
   }

@@ -16,8 +16,16 @@ export interface FsMoveEvent extends RuntimeEventBase {
 
 export interface FsDeleteEvent extends RuntimeEventBase {
   path: string;
+  name: string;
+  kind: 'file' | 'directory';
   success: boolean;
   error?: string;
+}
+
+export interface FsErrorEvent extends RuntimeEventBase {
+  operation: string;
+  path: string;
+  message: string;
 }
 
 export interface FsOpenEvent extends RuntimeEventBase {
