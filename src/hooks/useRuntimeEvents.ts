@@ -1,6 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { eventBus, RuntimeEventTypes } from '../core/events';
-import type { FsCopyEvent, FsDeleteEvent, FsOpenEvent, FsCreateEvent, FsMoveEvent } from '../core/events/types';
+
+const PLUGIN_EVENT_TYPES = [
+  'fs:copy',
+  'fs:move',
+  'fs:delete',
+  'fs:open',
+  'fs:create',
+] as const;
 
 export interface Operation {
   id: string;
@@ -10,27 +17,27 @@ export interface Operation {
 
 function describeOp(eventType: string, payload: unknown): string | null {
   switch (eventType) {
-    case RuntimeEventTypes.FsCopy: {
-      const p = payload as FsCopyEvent;
-      if (p.success) return `Copied ${p.src} \u2192 ${p.dest}`;
+    case 'fs:copy': {
+      const p = payload as { source: string; destination: string; success: boolean };
+      if (p.success) return `Copied ${p.source} \u2192 ${p.destination}`;
       return null;
     }
-    case RuntimeEventTypes.FsMove: {
-      const p = payload as FsMoveEvent;
-      if (p.success) return `Moved ${p.src} \u2192 ${p.dest}`;
+    case 'fs:move': {
+      const p = payload as { from: string; to: string; success: boolean };
+      if (p.success) return `Moved ${p.from} \u2192 ${p.to}`;
       return null;
     }
-    case RuntimeEventTypes.FsDelete: {
-      const p = payload as FsDeleteEvent;
+    case 'fs:delete': {
+      const p = payload as { path: string; success: boolean };
       if (p.success) return `Deleted ${p.path}`;
       return null;
     }
-    case RuntimeEventTypes.FsCreate: {
-      const p = payload as FsCreateEvent;
+    case 'fs:create': {
+      const p = payload as { path: string };
       return `Created ${p.path}`;
     }
-    case RuntimeEventTypes.FsOpen: {
-      const p = payload as FsOpenEvent;
+    case 'fs:open': {
+      const p = payload as { path: string };
       return `Opened ${p.path}`;
     }
     default:
@@ -63,7 +70,11 @@ export function useRuntimeEvents() {
       }, 3000);
     };
 
-    for (const type of Object.values(RuntimeEventTypes)) {
+    const watchedTypes: readonly string[] = [
+      ...Object.values(RuntimeEventTypes),
+      ...PLUGIN_EVENT_TYPES,
+    ];
+    for (const type of watchedTypes) {
       const unsub = eventBus.on(type, (payload) => handleEvent(type, payload));
       unsubs.push(unsub);
     }

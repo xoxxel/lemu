@@ -21,34 +21,6 @@ export interface CommandErrorEvent extends RuntimeEventBase {
   suggestion?: string;
 }
 
-export interface FsCreateEvent extends RuntimeEventBase {
-  path: string;
-}
-
-export interface FsCopyEvent extends RuntimeEventBase {
-  src: string;
-  dest: string;
-  success: boolean;
-  error?: string;
-}
-
-export interface FsMoveEvent extends RuntimeEventBase {
-  src: string;
-  dest: string;
-  success: boolean;
-  error?: string;
-}
-
-export interface FsDeleteEvent extends RuntimeEventBase {
-  path: string;
-  success: boolean;
-  error?: string;
-}
-
-export interface FsOpenEvent extends RuntimeEventBase {
-  path: string;
-}
-
 export interface UiTabOpenedEvent extends RuntimeEventBase {
   type: string;
   title: string;
@@ -79,11 +51,6 @@ export type RuntimeEventPayload =
   | CommandStartEvent
   | CommandSuccessEvent
   | CommandErrorEvent
-  | FsCreateEvent
-  | FsCopyEvent
-  | FsMoveEvent
-  | FsDeleteEvent
-  | FsOpenEvent
   | UiTabOpenedEvent
   | UiTabClosedEvent
   | UiFocusModeChangedEvent
@@ -95,11 +62,6 @@ export const RuntimeEventTypes = {
   CommandStart: 'command:start',
   CommandSuccess: 'command:success',
   CommandError: 'command:error',
-  FsCreate: 'fs:create',
-  FsCopy: 'fs:copy',
-  FsMove: 'fs:move',
-  FsDelete: 'fs:delete',
-  FsOpen: 'fs:open',
   UiTabOpened: 'ui:tab-opened',
   UiTabClosed: 'ui:tab-closed',
   UiFocusModeChanged: 'ui:focus-mode-changed',

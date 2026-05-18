@@ -1,7 +1,7 @@
 import type { Plugin, PluginContext, CommandExecutedPayload } from '../../core/plugin-system/types';
 import { standardActions } from '../../core/actions';
-import { eventBus, RuntimeEventTypes } from '../../core/events';
-import type { FsCopyEvent, FsMoveEvent, FsDeleteEvent, FsOpenEvent } from '../../core/events/types';
+import { eventBus } from '../../core/events';
+import type { FsCopyEvent, FsMoveEvent, FsDeleteEvent, FsOpenEvent } from './events';
 import openCommand from './open';
 import copyCommand from './copy';
 import moveCommand from './move';
@@ -39,10 +39,10 @@ export const fsPlugin: Plugin = {
     const { command, args, result } = payload;
 
     if (command === 'copy') {
-      eventBus.emit(RuntimeEventTypes.FsCopy, {
+      eventBus.emit('fs:copy', {
         timestamp: Date.now(),
-        src: args[0],
-        dest: args[1] || '(in-place)',
+        source: args[0],
+        destination: args[1] || '(in-place)',
         success: result.success,
         error: result.success ? undefined : result.message,
       } as FsCopyEvent);
@@ -50,10 +50,10 @@ export const fsPlugin: Plugin = {
     }
 
     if (command === 'move') {
-      eventBus.emit(RuntimeEventTypes.FsMove, {
+      eventBus.emit('fs:move', {
         timestamp: Date.now(),
-        src: args[0],
-        dest: args[1],
+        from: args[0],
+        to: args[1],
         success: result.success,
         error: result.success ? undefined : result.message,
       } as FsMoveEvent);
@@ -61,7 +61,7 @@ export const fsPlugin: Plugin = {
     }
 
     if (command === 'delete') {
-      eventBus.emit(RuntimeEventTypes.FsDelete, {
+      eventBus.emit('fs:delete', {
         timestamp: Date.now(),
         path: args[0],
         success: result.success,
@@ -71,7 +71,7 @@ export const fsPlugin: Plugin = {
     }
 
     if (command === 'open' && result.success) {
-      eventBus.emit(RuntimeEventTypes.FsOpen, {
+      eventBus.emit('fs:open', {
         timestamp: Date.now(),
         path: args[0],
       } as FsOpenEvent);
