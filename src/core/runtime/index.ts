@@ -3,6 +3,8 @@ import { PluginRegistry, PluginLoader, type PluginContext, type AppRenderContext
 import { eventBus } from '../events/event-bus';
 import { executor } from '../executor';
 import { ActionRegistry } from '../actions';
+import { FeedbackService, type FeedbackEvent } from '../feedback';
+import { fuzzyMatch, sortByScore } from '../autocomplete';
 import type { Command, ParsedCommand, CommandResult } from '../commands/types';
 import type { PluginAction } from '../actions/types';
 
@@ -10,6 +12,37 @@ const appWrappers: unknown[] = [];
 
 export function getAppWrappers(): unknown[] {
   return appWrappers;
+}
+
+function suggestCommand(unknown: string): string | null {
+  const allCommands = registry.getAll();
+  const items = allCommands.map(c => ({
+    value: c.name,
+    description: c.description,
+    type: 'command' as const,
+  }));
+  const matches = fuzzyMatch(unknown, items);
+  const sorted = sortByScore(unknown, matches);
+  return sorted.length > 0 ? '/' + sorted[0].value : null;
+}
+
+function getCommandUsage(cmdName: string): string | null {
+  const cmd = registry.get(cmdName);
+  return cmd?.usage ?? null;
+}
+
+function deriveCommandSuggestion(parsed: ParsedCommand, result: CommandResult): string | undefined {
+  if (result.success) return undefined;
+  const suggestion = parsed.name ? (suggestCommand(parsed.name) ?? undefined) : undefined;
+  const usage = getCommandUsage(parsed.name);
+
+  if (result.message.startsWith('Unknown command') && suggestion) {
+    return 'Did you mean ' + suggestion + '?';
+  }
+  if (!result.message.startsWith('Unknown command') && usage) {
+    return 'Example: ' + usage;
+  }
+  return suggestion;
 }
 
 function createPluginContext(actionRegistry: ActionRegistry): PluginContext {
@@ -50,6 +83,28 @@ function createPluginContext(actionRegistry: ActionRegistry): PluginContext {
     actions: {
       register: (type: string, action: PluginAction) => actionRegistry.register(type, action),
     },
+    feedback: {
+      error: (msg: string, meta) => {
+        const event: FeedbackEvent = { level: 'error', message: msg, ...meta, dismissible: true };
+        console.log('[FEEDBACK] source=plugin level=error message=%s', msg);
+        eventBus.emit('feedback', event);
+      },
+      warning: (msg: string, meta) => {
+        const event: FeedbackEvent = { level: 'warning', message: msg, ...meta, dismissible: true };
+        console.log('[FEEDBACK] source=plugin level=warning message=%s', msg);
+        eventBus.emit('feedback', event);
+      },
+      info: (msg: string, meta) => {
+        const event: FeedbackEvent = { level: 'info', message: msg, ...meta, dismissible: true };
+        console.log('[FEEDBACK] source=plugin level=info message=%s', msg);
+        eventBus.emit('feedback', event);
+      },
+      success: (msg: string, meta) => {
+        const event: FeedbackEvent = { level: 'success', message: msg, ...meta, dismissible: true };
+        console.log('[FEEDBACK] source=plugin level=success message=%s', msg);
+        eventBus.emit('feedback', event);
+      },
+    },
   };
 }
 
@@ -58,6 +113,7 @@ export interface Runtime {
   pluginLoader: PluginLoader;
   pluginContext: PluginContext;
   actionRegistry: ActionRegistry;
+  feedback: FeedbackService;
   execute(parsed: ParsedCommand): Promise<CommandResult>;
   getAutocomplete(parsed: ParsedCommand): ReturnType<typeof executor.getAutocomplete>;
   init(plugins: import('../plugin-system/types').Plugin[]): Promise<void>;
@@ -68,6 +124,10 @@ export async function createRuntime(): Promise<Runtime> {
   console.log('[RUNTIME] createRuntime()');
   const actionRegistry = new ActionRegistry();
   const pluginRegistry = new PluginRegistry();
+  const feedbackService = new FeedbackService();
+  eventBus.on('feedback', (payload) => {
+    feedbackService.show(payload as FeedbackEvent);
+  });
   const pluginContext = createPluginContext(actionRegistry);
   const pluginLoader = new PluginLoader(pluginRegistry, pluginContext);
 
@@ -78,6 +138,7 @@ export async function createRuntime(): Promise<Runtime> {
     pluginLoader,
     pluginContext,
     actionRegistry,
+    feedback: feedbackService,
 
     async execute(parsed: ParsedCommand): Promise<CommandResult> {
       console.log('[RUNTIME] execute() called: name=%s args=%j type=%s', parsed.name, parsed.args, 'command');
@@ -89,6 +150,20 @@ export async function createRuntime(): Promise<Runtime> {
       const result = await executor.execute(parsed);
       const duration = Date.now() - start;
       console.log('[RUNTIME] executor.execute() returned: success=%s message=%s', result.success, result.message?.slice(0, 100));
+
+      if (!result.success) {
+        const suggestion = deriveCommandSuggestion(parsed, result);
+        const event: FeedbackEvent = {
+          level: 'error',
+          message: result.message,
+          suggestion,
+          command: parsed.name,
+          dismissible: true,
+        };
+        console.log('[FEEDBACK] source=runtime level=error message=%s', result.message);
+        if (suggestion) console.log('[FEEDBACK] suggestion generated: %s', suggestion);
+        eventBus.emit('feedback', event);
+      }
 
       const payload: CommandExecutedPayload = {
         command: parsed.name,
@@ -160,6 +235,7 @@ export async function createRuntime(): Promise<Runtime> {
 
     async destroy() {
       console.log('[RUNTIME] destroy()');
+      feedbackService.destroy();
       for (const plugin of activePlugins()) {
         if (plugin.onCleanup) {
           try {

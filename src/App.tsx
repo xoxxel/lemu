@@ -7,9 +7,11 @@ import { useTerminal } from './hooks/useTerminal';
 import type { Tab } from './core/tabs/types';
 import { createTabId } from './core/tabs/types';
 import { viewMeta } from './views';
+import type { FeedbackEvent } from './core/feedback/types';
 import Sidebar from './components/Sidebar';
 import Workspace from './components/Workspace';
 import InputBar from './components/InputBar';
+import FeedbackBar from './components/FeedbackBar';
 import TerminalTabBar from './components/TerminalTabBar';
 import TerminalOutput from './components/TerminalOutput';
 import MainTabBar from './components/MainTabBar';
@@ -50,6 +52,7 @@ export default function App() {
   const [inputValue, setInputValue] = useState('');
   const [terminalPanelOpen, setTerminalPanelOpen] = useState(false);
   const [pinnedTabs, setPinnedTabs] = useState<Set<string>>(new Set());
+  const [feedback, setFeedback] = useState<FeedbackEvent | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
 
@@ -109,6 +112,13 @@ export default function App() {
     const s = terminal.sessions.find((s) => s.id === terminal.activeSessionId);
     if (s) setCwd(s.cwd);
   }, [terminal.sessions, terminal.activeSessionId]);
+
+  useEffect(() => {
+    const unsub = getRuntime().feedback.subscribe((ev) => {
+      setFeedback(ev);
+    });
+    return unsub;
+  }, []);
 
   const handleShellCommand = useCallback(async (trimmed: string) => {
     const sid = await terminal.ensureSession();
@@ -205,6 +215,12 @@ export default function App() {
       if (!action) {
         addMessage('user', trimmed);
         addMessage('error', `No action '${actionQuery}' for ${activeTab.type}. Type > to list available actions.`);
+        runtime.feedback.show({
+          level: 'error',
+          message: `No action '${actionQuery}' for ${activeTab.type}`,
+          suggestion: 'Type > to list available actions',
+          dismissible: true,
+        });
         return;
       }
       console.log('[ACTIONS] selected:', action.id);
@@ -221,7 +237,9 @@ export default function App() {
         const result = await action.handler(ctx);
         addMessage('system', result);
       } catch (err) {
-        addMessage('error', `Action error: ${err instanceof Error ? err.message : String(err)}`);
+        const msg = `Action error: ${err instanceof Error ? err.message : String(err)}`;
+        addMessage('error', msg);
+        runtime.feedback.show({ level: 'error', message: msg, dismissible: true });
       }
       return;
     }
@@ -293,8 +311,15 @@ export default function App() {
     await handleShellCommand(trimmed);
   }, [addHistory, addMessage, clearAutocomplete, terminal, handleShellCommand, addTab, activeTab, pinnedTabs, togglePinTab, handleTerminalCommand]);
 
+  const dismissFeedback = useCallback(() => {
+    getRuntime().feedback.clear();
+  }, []);
+
   const handleInputChange = useCallback((value: string) => {
     setInputValue(value);
+    if (getRuntime().feedback.currentFeedback) {
+      getRuntime().feedback.clear();
+    }
     if (value.startsWith('/') || value.startsWith('>')) {
       updateAutocomplete(value);
     } else {
@@ -304,6 +329,12 @@ export default function App() {
   }, [updateAutocomplete, clearAutocomplete, isNavigating, resetHistory]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Escape' && feedback) {
+      e.preventDefault();
+      dismissFeedback();
+      return;
+    }
+
     const menuOpen = suggestions.length > 0;
 
     if (menuOpen) {
@@ -358,7 +389,7 @@ export default function App() {
       e.preventDefault();
       handleSubmit(inputValue);
     }
-  }, [inputValue, suggestions, selectCurrent, selectNext, selectPrev, clearAutocomplete, handleSubmit, historyUp, historyDown, resetHistory]);
+  }, [inputValue, suggestions, feedback, selectCurrent, selectNext, selectPrev, clearAutocomplete, handleSubmit, historyUp, historyDown, resetHistory, dismissFeedback]);
 
   const handleTerminalToggle = useCallback(() => {
     setTerminalPanelOpen((prev) => !prev);
@@ -411,6 +442,7 @@ export default function App() {
             )}
           </div>
         )}
+        <FeedbackBar feedback={feedback} onDismiss={dismissFeedback} />
         <InputBar
           ref={inputRef}
           value={inputValue}

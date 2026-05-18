@@ -12,6 +12,7 @@ import { browserPlugin } from './plugins/browser';
 import { aiPlugin } from './plugins/ai';
 import { helpPlugin } from './plugins/help';
 import { actionsPlugin } from './plugins/actions';
+import { feedbackPlugin } from './plugins/feedback';
 import './styles/global.css';
 
 function renderApp() {
@@ -32,7 +33,7 @@ function renderApp() {
 async function bootstrap() {
   const runtime = await createRuntime();
   setRuntime(runtime);
-  await runtime.init([fsPlugin, searchPlugin, gitPlugin, taskPlugin, execPlugin, browserPlugin, aiPlugin, helpPlugin, actionsPlugin]);
+  await runtime.init([fsPlugin, searchPlugin, gitPlugin, taskPlugin, execPlugin, browserPlugin, aiPlugin, helpPlugin, actionsPlugin, feedbackPlugin]);
   renderApp();
 }
 

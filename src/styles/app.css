@@ -380,6 +380,74 @@
   color: var(--text-secondary);
 }
 
+.feedback-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  font-size: 13px;
+  border-top: 1px solid var(--border);
+  user-select: none;
+}
+
+.feedback-bar.feedback-error {
+  background: rgba(255, 80, 80, 0.08);
+  color: #ff5050;
+}
+
+.feedback-bar.feedback-warning {
+  background: rgba(255, 180, 50, 0.08);
+  color: #ffb432;
+}
+
+.feedback-bar.feedback-info {
+  background: rgba(80, 160, 255, 0.08);
+  color: #50a0ff;
+}
+
+.feedback-bar.feedback-success {
+  background: rgba(80, 200, 80, 0.08);
+  color: #50c850;
+}
+
+.feedback-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.feedback-message {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.feedback-suggestion {
+  font-size: 12px;
+  opacity: 0.8;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+}
+
+.feedback-dismiss {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: inherit;
+  opacity: 0.5;
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 13px;
+  border-radius: 3px;
+}
+
+.feedback-dismiss:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+
 .input-bar {
   display: flex;
   align-items: center;

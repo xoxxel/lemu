@@ -90,4 +90,10 @@ export interface PluginContext {
   actions: {
     register(type: string, action: import('../actions/types').PluginAction): void;
   };
+  feedback: {
+    error(message: string, meta?: { suggestion?: string; command?: string }): void;
+    warning(message: string, meta?: { suggestion?: string; command?: string }): void;
+    info(message: string, meta?: { suggestion?: string; command?: string }): void;
+    success(message: string, meta?: { suggestion?: string; command?: string }): void;
+  };
 }
