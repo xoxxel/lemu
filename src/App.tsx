@@ -13,6 +13,7 @@ import type { FeedbackEvent } from './core/feedback/types';
 import Sidebar from './components/Sidebar';
 import Workspace from './components/Workspace';
 import InputBar from './components/InputBar';
+import type { InputMode } from './components/InputBar';
 import FeedbackBar from './components/FeedbackBar';
 import TerminalTabBar from './components/TerminalTabBar';
 import TerminalOutput from './components/TerminalOutput';
@@ -452,11 +453,11 @@ export default function App() {
     setTerminalPanelOpen((prev) => !prev);
   }, []);
 
-  const modeLabel = inputValue.trim().startsWith(':')
-    ? 'terminal'
-    : activeTab
-      ? (getRuntime().viewMetaMap[activeTab.type]?.label ?? activeTab.type)
-      : null;
+  const inputMode: InputMode = inputValue.trim().startsWith('/') || inputValue.trim().startsWith('!')
+    ? 'command'
+    : inputValue.trim().startsWith(':')
+      ? 'terminal'
+      : 'normal';
 
   return (
     <div className="app" onClick={() => {
@@ -514,7 +515,7 @@ export default function App() {
           suggestions={suggestions}
           selectedIndex={selectedIndex}
           hint={statusText}
-          modeLabel={modeLabel}
+          mode={inputMode}
           onSuggestionClick={(idx) => {
             const selected = suggestions[idx];
             if (selected) {

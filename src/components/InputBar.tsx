@@ -1,6 +1,8 @@
 import { forwardRef, useRef, useEffect } from 'react';
 import type { AutocompleteItem } from '../core/commands/types';
 
+export type InputMode = 'normal' | 'command' | 'terminal';
+
 interface InputBarProps {
   value: string;
   onChange: (value: string) => void;
@@ -9,11 +11,17 @@ interface InputBarProps {
   selectedIndex: number;
   onSuggestionClick: (index: number) => void;
   hint?: string | null;
-  modeLabel?: string | null;
+  mode?: InputMode;
 }
 
+const INDICATOR: Record<InputMode, string> = {
+  normal: '\u2022',
+  command: '/',
+  terminal: ':',
+};
+
 const InputBar = forwardRef<HTMLInputElement, InputBarProps>(
-  ({ value, onChange, onKeyDown, suggestions, selectedIndex, onSuggestionClick, hint, modeLabel }, ref) => {
+  ({ value, onChange, onKeyDown, suggestions, selectedIndex, onSuggestionClick, hint, mode = 'normal' }, ref) => {
     const menuRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -24,10 +32,8 @@ const InputBar = forwardRef<HTMLInputElement, InputBarProps>(
       }
     }, [selectedIndex]);
 
-    const promptChar = value.startsWith('/') || value.startsWith('!') ? '>' : value.startsWith('@') ? '@' : value.startsWith(':') ? ':' : '>';
-
     return (
-      <div className="input-bar-container">
+      <div className={`input-bar-container mode-${mode}`}>
         {suggestions.length > 0 && (
           <div ref={menuRef} className="command-menu">
             {suggestions.map((item, idx) => (
@@ -57,10 +63,7 @@ const InputBar = forwardRef<HTMLInputElement, InputBarProps>(
           </div>
         )}
         <div className="input-bar">
-          <span className="prompt">{promptChar}</span>
-          {modeLabel && (
-            <span className="mode-label">{modeLabel}</span>
-          )}
+          <span className="mode-indicator">{INDICATOR[mode]}</span>
           <input
             ref={ref}
             type="text"

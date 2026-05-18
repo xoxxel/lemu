@@ -1,3 +1,5 @@
+﻿import { SyntaxHighlight } from '../../lib/syntax';
+
 interface EditorData {
   path: string;
   content: string;
@@ -11,39 +13,25 @@ export function EditorView({ state }: { state: Record<string, unknown> }) {
       display: 'flex',
       flexDirection: 'column',
       height: '100%',
-      fontFamily: 'var(--font-mono)',
-      fontSize: 13,
     }}>
       <div style={{
         padding: '8px 16px',
-        borderBottom: '0.5px solid var(--color-border-tertiary)',
-        background: 'var(--color-background-secondary)',
+        borderBottom: '0.5px solid var(--border)',
+        background: 'var(--bg-secondary)',
         fontSize: 12,
-        color: 'var(--color-text-secondary)',
+        color: 'var(--text-muted)',
         flexShrink: 0,
+        fontFamily: 'var(--font-mono)',
       }}>
         {data.path}
       </div>
-      <textarea
-        value={data.content}
-        readOnly
-        style={{
-          flex: 1,
-          width: '100%',
-          padding: '16px 20px',
-          border: 'none',
-          outline: 'none',
-          resize: 'none',
-          fontFamily: 'inherit',
-          fontSize: 'inherit',
-          lineHeight: 1.5,
-          whiteSpace: 'pre-wrap',
-          overflowWrap: 'break-word',
-          tabSize: 2,
-          background: 'var(--color-background-primary)',
-          color: 'var(--color-text-primary)',
-        }}
-      />
+      <div style={{
+        flex: 1,
+        overflow: 'auto',
+        background: 'var(--bg-primary)',
+      }}>
+        <SyntaxHighlight code={data.content} path={data.path} />
+      </div>
     </div>
   );
 }

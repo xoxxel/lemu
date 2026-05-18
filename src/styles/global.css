@@ -22,6 +22,15 @@
   --font-mono: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
   --sidebar-width: 260px;
   --input-height: 48px;
+
+  --syntax-keyword: #7a8ba8;
+  --syntax-string: #b59a6a;
+  --syntax-comment: #444444;
+  --syntax-function: #d4d4d4;
+  --syntax-number: #8a9ba8;
+  --syntax-tag: #6a8ba8;
+  --syntax-attr: #8a9a6a;
+  --syntax-punctuation: #666666;
 }
 
 html, body, #root {
