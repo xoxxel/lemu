@@ -1,6 +1,7 @@
 import type { Plugin, PluginContext } from '../../core/plugin-system/types';
 import { standardActions } from '../../core/actions';
 import runCommand from './run';
+import { ExecView } from './ExecView';
 
 export const execPlugin: Plugin = {
   id: 'exec',
@@ -9,6 +10,13 @@ export const execPlugin: Plugin = {
   description: 'Execute shell commands',
   commands: [runCommand],
   actions: standardActions,
+  views: [
+    {
+      type: 'exec',
+      component: ExecView,
+      meta: { label: 'Output', icon: '\u25B6' },
+    },
+  ],
   docs: {
     overview: 'Execute shell commands non-interactively via the server exec API. The command runs synchronously and returns stdout/stderr all at once.',
     examples: '  /run npm test\n  /run ls -la\n  !echo hello\n  /run node -e "console.log(1+1)"',

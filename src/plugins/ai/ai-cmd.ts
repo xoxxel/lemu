@@ -35,6 +35,9 @@ const aiCommand: Command = {
     const { askAI } = await import('../../core/ai');
     const question = args.join(' ');
     const result = await askAI(question);
+    if (result.success && result.data) {
+      return { ...result, data: { type: 'ai', ...result.data as Record<string, unknown> } };
+    }
     return result;
   },
   async autocomplete(args) {

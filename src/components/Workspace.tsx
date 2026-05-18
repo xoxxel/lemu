@@ -1,6 +1,7 @@
 import { forwardRef } from 'react';
 import type { Tab } from '../core/tabs/types';
 import { getRuntime } from '../core/runtime/instance';
+import { GenericJsonViewer } from './GenericJsonViewer';
 
 interface WorkspaceProps {
   activeTab: Tab | null;
@@ -8,7 +9,7 @@ interface WorkspaceProps {
 
 function renderTabContent(tab: Tab): JSX.Element | null {
   const Component = getRuntime().viewComponentMap[tab.type];
-  if (!Component) return <div className="empty-state">No content for this tab type.</div>;
+  if (!Component) return <GenericJsonViewer data={tab.state ?? {}} />;
   return <Component state={tab.state ?? {}} />;
 }
 

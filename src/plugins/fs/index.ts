@@ -4,6 +4,7 @@ import openCommand from './open';
 import copyCommand from './copy';
 import moveCommand from './move';
 import deleteCommand from './delete';
+import { EditorView } from './EditorView';
 
 export const fsPlugin: Plugin = {
   id: 'fs',
@@ -12,7 +13,13 @@ export const fsPlugin: Plugin = {
   description: 'File and directory operations (open, copy, move, delete)',
   commands: [openCommand, copyCommand, moveCommand, deleteCommand],
   actions: standardActions,
-  tabTypes: ['editor', 'text'],
+  views: [
+    {
+      type: 'editor',
+      component: EditorView,
+      meta: { label: 'Editor', icon: '\uD83D\uDCC4' },
+    },
+  ],
   docs: {
     overview: 'The Filesystem plugin provides basic file and directory operations. All operations go through the server REST API and are validated against path traversal attacks.',
     examples: '  /open package.json\n  /copy file.ts file.backup.ts\n  /move old.ts new.ts\n  /delete -f temp.log',

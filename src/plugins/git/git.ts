@@ -37,7 +37,7 @@ const gitCommand: Command = {
       return {
         success: result.code === 0,
         message: output || `git ${cmd} completed (exit ${result.code})`,
-        data: { type: 'shell', command: `git ${cmd}`, ...result },
+        data: { type: 'git', command: `git ${cmd}`, stdout: result.stdout, stderr: result.stderr },
       };
     } catch (err) {
       return { success: false, message: `git failed: ${err instanceof Error ? err.message : String(err)}` };

@@ -39,7 +39,6 @@ export interface Plugin {
   actions?: PluginAction[];
   getActions?(): PluginAction[];
   views?: PluginView[];
-  tabTypes?: string[];
   onConfig?(config: Record<string, unknown>): Promise<Record<string, unknown>>;
   onReady?(ctx: PluginContext): Promise<void>;
   onCommandExecuted?(payload: CommandExecutedPayload): Promise<void>;

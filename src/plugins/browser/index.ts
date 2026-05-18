@@ -1,6 +1,7 @@
 import type { Plugin, PluginContext } from '../../core/plugin-system/types';
 import { standardActions } from '../../core/actions';
 import browserCommand from './browser';
+import { BrowserView } from './BrowserView';
 
 export const browserPlugin: Plugin = {
   id: 'browser',
@@ -9,7 +10,13 @@ export const browserPlugin: Plugin = {
   description: 'Preview HTML files in an embedded browser',
   commands: [browserCommand],
   actions: standardActions,
-  tabTypes: ['browser'],
+  views: [
+    {
+      type: 'browser',
+      component: BrowserView,
+      meta: { label: 'Browser', icon: '\uD83C\uDF10' },
+    },
+  ],
   docs: {
     overview: 'Preview HTML files in an embedded iframe within the workspace. The file content is read via the server API and rendered with sandboxed scripts.',
     examples: '  /browser index.html\n  /browse dist/index.html\n  /preview build/report.html',

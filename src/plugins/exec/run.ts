@@ -36,7 +36,7 @@ const runCommand: Command = {
       return {
         success: result.code === 0,
         message: output || `Command completed with exit code ${result.code}`,
-        data: { type: 'shell', command: cmd, ...result },
+        data: { type: 'exec', command: cmd, stdout: result.stdout, stderr: result.stderr },
       };
     } catch (err) {
       return { success: false, message: `Command failed: ${err instanceof Error ? err.message : String(err)}` };

@@ -1,6 +1,7 @@
 import type { Plugin, PluginContext } from '../../core/plugin-system/types';
 import aiCommand from './ai-cmd';
 import agentCommand from './agent-cmd';
+import { AIChatView } from './AIChatView';
 
 export const aiPlugin: Plugin = {
   id: 'ai',
@@ -8,7 +9,18 @@ export const aiPlugin: Plugin = {
   version: '0.1.0',
   description: 'AI and agent commands',
   commands: [aiCommand, agentCommand],
-  tabTypes: ['ai', 'agent'],
+  views: [
+    {
+      type: 'ai',
+      component: AIChatView,
+      meta: { label: 'AI', icon: '\u2728' },
+    },
+    {
+      type: 'agent',
+      component: AIChatView,
+      meta: { label: 'Agent', icon: '\uD83E\uDD16' },
+    },
+  ],
   docs: {
     overview: 'AI-powered assistance including Q&A (/ai) and autonomous agent (/agent). Requires an API key from an OpenAI-compatible provider.',
     examples: '  /ai config apiKey=sk-...\n  /ai How does the parser work?\n  /agent fix the build errors\n  /ask What is this project?\n  /auto analyze the architecture',

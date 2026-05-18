@@ -15,39 +15,43 @@ No lint, typecheck, test, or formatter commands exist.
 
 **lemu** is a browser-based terminal workspace. React frontend (`src/`) + Express/WebSocket backend (`server/`). Vite proxies `/api` and `/ws` to the backend on port 3001.
 
-### Plugin System (not `src/core/commands/`)
-
-Commands live in `src/plugins/*/` and register via the `Plugin` interface (`src/core/plugin-system/types.ts`). Each plugin has:
-- `activate(ctx)` — called at load time; used to register commands via `ctx.commands.register(cmd)`
-- `onReady(ctx)`, `onCommandExecuted(payload)`, `onCleanup()` — optional lifecycle hooks
-
-Plugins are auto-discovered via `import.meta.glob` — no manual registration needed.
-
 ### Input Routing
 
 | Input | Route |
 |-------|-------|
 | `/cmd args` | Runtime executor → command registry lookup |
-| `!cmd args` | Parser rewrites to `/run cmd args` |
-| `@topic` | Inline help lookup in App.tsx (hardcoded) |
+| `!cmd args` | Parser → `{ name: 'run', args: ['cmd args'] }` → plugin exec |
+| `@topic` | App.tsx → `runtime.execute({ name: 'help', args: [topic] })` |
+| `>action` | Plugin action on active tab via action registry |
 | `plain text` | WebSocket → PTY shell session |
 
-### Hardcoded Overrides in App.tsx
+Only `/terminal` is hardcoded in `App.tsx` (line 278). All other `/cmd` routes go through plugins.
 
-`/terminal` and `/open`/`/edit` are handled in `App.tsx:203-224` **before** the runtime executor. `/open` creates editor tabs (read-only `<pre>` previews). Other `/cmd` routes fall through to `getRuntime().execute()`.
+### Plugin System
+
+Commands live in `src/plugins/*/` and register via the `Plugin` interface (`src/core/plugin-system/types.ts`). Each plugin has:
+
+Required:
+- `activate(ctx)` — register commands, actions, views via the context
+
+Optional lifecycle hooks: `deactivate(ctx)`, `onConfig(config)`, `onReady(ctx)`, `onAppRender(ctx)`, `onCommandExecuted(payload)`, `onCleanup()`
+
+Optional properties: `commands`, `actions`, `views`, `docs`, `tabTypes`
+
+Views (`ctx.views.register(type, component, meta)`) create new tab types rendered via `runtime.viewComponentMap`. Actions (`ctx.actions.register(type, action)`) are invoked with `>action-name` when a matching tab is active.
+
+Plugins are auto-discovered via `import.meta.glob('./plugins/*/index.ts', { eager: true })` in `src/main.tsx` — no manual registration needed.
 
 ### Key Architecture Notes
 
 - ARCHITECTURE.md describes an **outdated** command system (old `src/core/commands/` self-registration). The real system is the plugin architecture in `src/plugins/` + `src/core/plugin-system/`.
 - Server search (`/api/fs/search`) is pure Node.js walk + `String.includes()` — no `grep` dependency (contrary to ARCHITECTURE.md claims).
 - All state is in-memory. No persistence. Lost on page reload.
-- PTY sessions are lazy-created (first shell command triggers `ensureSession()`). No session on WebSocket connect.
-- AI module is code-split (`dynamic import()` in ai-cmd.ts and agent-cmd.ts).
+- PTY sessions are lazy-created on first shell command (client-side `ensureSession()`). No session on WebSocket connect.
+- AI module is code-split (`dynamic import()` in ai-cmd and agent-cmd) — first use is slow.
 - Filesystem endpoints validate paths via `path.resolve() + .startsWith(WORKSPACE)`.
-
-### Plugin Registration
-
-Plugins are auto-discovered via `import.meta.glob('./plugins/*/index.ts', { eager: true })` in `src/main.tsx`. The discovery function (`src/core/plugin-system/plugin-discovery.ts`) scans each module for exports matching the Plugin shape (duck-types `id`, `name`, `version`, `activate`). No manual registration needed.
+- Feedback system (`src/core/feedback/`) emits events via event bus; App.tsx shows them in a FeedbackBar.
+- Tab pinning keeps tabs visible in sidebar even when not active.
 
 ### Adding a New Plugin
 

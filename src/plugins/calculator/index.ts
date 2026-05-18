@@ -181,8 +181,6 @@ export const calculatorPlugin: Plugin = {
     },
   ],
 
-  tabTypes: ['calculator'],
-
   async activate(ctx: PluginContext) {
     ctx.feedback.info('Calculator plugin loaded. Type /calc <expression> to compute.');
   },

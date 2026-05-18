@@ -1,6 +1,7 @@
 import type { Plugin, PluginContext } from '../../core/plugin-system/types';
 import { standardActions } from '../../core/actions';
 import taskCommand from './task';
+import { TaskBoardView } from './TaskBoardView';
 
 export const taskPlugin: Plugin = {
   id: 'task',
@@ -9,7 +10,13 @@ export const taskPlugin: Plugin = {
   description: 'Manage tasks (list, add, complete, remove)',
   commands: [taskCommand],
   actions: standardActions,
-  tabTypes: ['task'],
+  views: [
+    {
+      type: 'task',
+      component: TaskBoardView,
+      meta: { label: 'Tasks', icon: '\u2611' },
+    },
+  ],
   docs: {
     overview: 'An in-memory task manager for tracking work items during a development session. Supports adding, listing, completing, and removing tasks.',
     examples: '  /task add Fix login bug\n  /task list\n  /task done 1712345678901\n  /task remove 1712345678901\n  /todo add Write tests',

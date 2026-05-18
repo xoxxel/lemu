@@ -37,7 +37,7 @@ const searchCommand: Command = {
       return {
         success: true,
         message: `Found ${results.length} result(s) for "${pattern}"`,
-        data: { results, type: 'search' },
+        data: { type: 'search', results },
       };
     } catch (err) {
       return { success: false, message: `Search failed: ${err instanceof Error ? err.message : String(err)}` };

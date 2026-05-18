@@ -140,7 +140,7 @@ const helpCommand: Command = {
   async execute(args) {
     if (args.length === 0) {
       const content = formatOverview();
-      return { success: true, message: content, data: { type: 'text', content } };
+      return { success: true, message: content, data: { type: 'help', content } };
     }
 
     const topic = args.join(' ');
@@ -148,13 +148,13 @@ const helpCommand: Command = {
     const plugin = findPlugin(topic);
     if (plugin) {
       const content = formatPluginHelp(plugin);
-      return { success: true, message: content, data: { type: 'text', content } };
+      return { success: true, message: content, data: { type: 'help', content } };
     }
 
     const cmd = findCommand(topic);
     if (cmd) {
       const content = formatCommandHelp(cmd);
-      return { success: true, message: content, data: { type: 'text', content } };
+      return { success: true, message: content, data: { type: 'help', content } };
     }
 
     return {

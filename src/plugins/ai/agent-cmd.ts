@@ -20,7 +20,11 @@ const agentCommand: Command = {
 
     const task = args.join(' ');
     const { runAgent } = await import('../../core/ai');
-    return runAgent(task);
+    const result = await runAgent(task);
+    if (result.success && result.data) {
+      return { ...result, data: { type: 'agent', ...result.data as Record<string, unknown> } };
+    }
+    return result;
   },
   async autocomplete(args) {
     if (args.length === 0) {

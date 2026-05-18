@@ -258,8 +258,7 @@ export default function App() {
       if (result.success && result.data && typeof result.data === 'object') {
         const d = result.data as Record<string, unknown>;
         const dType = d.type as string | undefined;
-        const viewMeta = getRuntime().viewMetaMap;
-        if (dType && viewMeta[dType]) {
+        if (dType && getRuntime().viewComponentMap[dType]) {
           addTab(dType, `help: ${topic}`, undefined, d);
         }
       }
@@ -293,8 +292,7 @@ export default function App() {
       if (result.success && result.data && typeof result.data === 'object') {
         const d = result.data as Record<string, unknown>;
         const dType = d.type as string | undefined;
-        const viewMeta = getRuntime().viewMetaMap;
-        if (dType && viewMeta[dType]) {
+        if (dType && getRuntime().viewComponentMap[dType]) {
           const title = (d.path as string) || (d.command as string) || parsed.name;
           addTab(dType, title, d.path as string | undefined, d);
         }

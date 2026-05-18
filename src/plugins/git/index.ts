@@ -1,6 +1,7 @@
 import type { Plugin, PluginContext } from '../../core/plugin-system/types';
 import { standardActions } from '../../core/actions';
 import gitCommand from './git';
+import { GitView } from './GitView';
 
 export const gitPlugin: Plugin = {
   id: 'git',
@@ -9,6 +10,13 @@ export const gitPlugin: Plugin = {
   description: 'Run git commands from the terminal',
   commands: [gitCommand],
   actions: standardActions,
+  views: [
+    {
+      type: 'git',
+      component: GitView,
+      meta: { label: 'Git', icon: '\uD83D\uDC65' },
+    },
+  ],
   docs: {
     overview: 'Run git commands non-interactively through the shell exec API. Prefixes arguments with "git" and executes them synchronously.',
     examples: '  /git status\n  /git add -A\n  /git commit -m "message"\n  /git log --oneline -5\n  /g diff',
