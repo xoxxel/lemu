@@ -290,6 +290,40 @@
   color: var(--text-muted);
 }
 
+/* ── Operational Feed ──────────────────────────────────────────── */
+
+.op-feed {
+  display: flex;
+  overflow: hidden;
+  gap: 0;
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+  padding: 0 16px;
+  min-height: 0;
+  flex-wrap: nowrap;
+}
+
+.op-feed-entry {
+  padding: 4px 12px 4px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: default;
+  user-select: none;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+
+.op-feed-entry:hover {
+  opacity: 1;
+}
+
+.op-feed-success {
+  color: var(--green);
+  opacity: 0.7;
+}
+
 .input-bar-container {
   position: relative;
   border-top: 1px solid var(--border);

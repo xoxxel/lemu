@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import { registry } from '../commands/registry';
 import { PluginRegistry, PluginLoader, type PluginContext, type AppRenderContext, type CommandExecutedPayload, type PluginInputPayload, type PluginInputResult } from '../plugin-system';
-import { eventBus } from '../events/event-bus';
+import { eventBus, RuntimeEventTypes } from '../events';
 import { executor } from '../executor';
 import { ActionRegistry } from '../actions';
 import { FeedbackService, type FeedbackEvent } from '../feedback';
@@ -194,6 +194,12 @@ export async function createRuntime(): Promise<Runtime> {
       console.log('[RUNTIME] Active plugins: %d', active.length);
 
       const start = Date.now();
+
+      eventBus.emit(RuntimeEventTypes.CommandStart, {
+        timestamp: start,
+        command: parsed.name,
+        args: parsed.args,
+      });
       console.log('[RUNTIME] Forwarding to executor.execute()');
       const result = await executor.execute(parsed);
       const duration = Date.now() - start;
@@ -211,6 +217,22 @@ export async function createRuntime(): Promise<Runtime> {
         console.log('[FEEDBACK] source=runtime level=error message=%s', result.message);
         if (suggestion) console.log('[FEEDBACK] suggestion generated: %s', suggestion);
         eventBus.emit('feedback', event);
+
+        eventBus.emit(RuntimeEventTypes.CommandError, {
+          timestamp: Date.now(),
+          command: parsed.name,
+          args: parsed.args,
+          message: result.message,
+          suggestion,
+        });
+      } else {
+        eventBus.emit(RuntimeEventTypes.CommandSuccess, {
+          timestamp: Date.now(),
+          command: parsed.name,
+          args: parsed.args,
+          duration,
+          message: result.message,
+        });
       }
 
       const payload: CommandExecutedPayload = {
@@ -277,7 +299,7 @@ export async function createRuntime(): Promise<Runtime> {
         }
       }
 
-      eventBus.emit('runtime:ready', {});
+      eventBus.emit(RuntimeEventTypes.RuntimeReady, { timestamp: Date.now() });
       console.log('[RUNTIME] init() complete');
     },
 

@@ -16,6 +16,7 @@ import Workspace from './components/Workspace';
 import InputBar from './components/InputBar';
 import type { InputMode } from './components/InputBar';
 import FeedbackBar from './components/FeedbackBar';
+import { OperationalFeed } from './components/OperationalFeed';
 import TerminalTabBar from './components/TerminalTabBar';
 import TerminalOutput from './components/TerminalOutput';
 import MainTabBar from './components/MainTabBar';
@@ -511,6 +512,7 @@ export default function App() {
           </div>
         )}
         <FeedbackBar feedback={feedback} onDismiss={dismissFeedback} />
+        <OperationalFeed />
         <InputBar
           ref={inputRef}
           value={inputValue}
