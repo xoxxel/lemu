@@ -82,7 +82,7 @@ function parseExpression(input: string): {
 // ─── Command ──────────────────────────────────────────────────────────────────
 
 const calcCommand: Command = {
-  name: 'calc',
+  name: 'calculator',
   description: 'Evaluate a mathematical expression with a visual breakdown',
   aliases: ['math', '='],
   usage: '/calc <expression>',

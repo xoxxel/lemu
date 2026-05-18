@@ -22,23 +22,60 @@ const api = {
   },
 };
 
+function resolveDest(src: string, destArg: string | undefined): string {
+  const hasDirSep = src.includes('/');
+  const srcDir = hasDirSep ? src.split('/').slice(0, -1).join('/') : '';
+  const srcName = src.split('/').pop() || src;
+
+  // No destination: duplicate in-place
+  if (!destArg) {
+    const ext = srcName.includes('.') ? '.' + srcName.split('.').pop() : '';
+    const base = ext ? srcName.slice(0, -ext.length) : srcName;
+    const dupe = `${srcDir}${srcDir ? '/' : ''}${base}-copy${ext}`;
+    return dupe.startsWith('/') ? dupe.slice(1) : dupe;
+  }
+
+  // ./ prefix means workspace root
+  if (destArg.startsWith('./')) {
+    return destArg.slice(2);
+  }
+
+  // Ends with / means target directory
+  if (destArg.endsWith('/')) {
+    const dir = destArg.replace(/\/+$/, '');
+    return `${dir}/${srcName}`;
+  }
+
+  // Has a directory separator — explicit full path
+  if (destArg.includes('/')) {
+    return destArg;
+  }
+
+  // Bare filename — same directory as source
+  return `${srcDir}${srcDir ? '/' : ''}${destArg}`;
+}
+
 const copyCommand: Command = {
   name: 'copy',
-  description: 'Copy a file or directory',
+  description: 'Duplicate a file',
   aliases: ['cp'],
-  usage: '/copy <source> <destination>',
+  usage: '/copy <source> [destination]',
   examples: [
-    { input: '/copy file.ts file.backup.ts', description: 'Create a backup of a file' },
-    { input: '/cp package.json package.backup.json', description: 'Copy using alias' },
+    { input: '/copy test/demo.md', description: 'Duplicate in place → test/demo-copy.md' },
+    { input: '/copy test/demo.md backup.md', description: 'Rename in same directory → test/backup.md' },
+    { input: '/copy test/demo.md backups/', description: 'Copy into directory → backups/demo.md' },
+    { input: '/copy test/demo.md backups/demo.backup.md', description: 'Explicit full target path' },
+    { input: '/copy test/demo.md ./demo.backup.md', description: 'Copy to workspace root' },
   ],
   edgeCases: [
-    { scenario: 'missing destination', input: '/copy file.ts', expected: 'Usage error' },
+    { scenario: 'missing destination', input: '/copy file.ts', expected: 'Duplicates as file-copy.ts in same directory' },
     { scenario: 'source not found', input: '/copy nope.ts dest.ts', expected: 'error: ENOENT' },
     { scenario: 'path traversal', input: '/copy ../../etc/passwd dest', expected: 'error: Path outside workspace' },
   ],
   async execute(args) {
-    const [src, dest] = args;
+    const [src, destArg] = args;
     try {
+      const dest = resolveDest(src, destArg);
       await api.copy(src, dest);
       return { success: true, message: `Copied ${src} → ${dest}` };
     } catch (err) {
@@ -57,7 +94,7 @@ const copyCommand: Command = {
     return [];
   },
   validate(args) {
-    if (args.length < 2) return 'Usage: /copy <source> <destination>';
+    if (args.length < 1) return 'Usage: /copy <source> [destination]';
     return null;
   },
 };
