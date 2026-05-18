@@ -1,3 +1,4 @@
+import type { ComponentType } from 'react';
 import type { Command } from '../commands/types';
 import type { PluginAction } from '../actions/types';
 
@@ -9,7 +10,6 @@ export interface CommandExecutedPayload {
 }
 
 export interface AppRenderContext {
-  /** Register a React component wrapper (higher-order provider) around the root App */
   registerWrapper(wrapper: unknown): void;
 }
 
@@ -22,6 +22,12 @@ export interface PluginDocs {
   limitations?: string;
 }
 
+export interface PluginView {
+  type: string;
+  component: ComponentType<{ state: Record<string, unknown> }>;
+  meta: { label: string; icon: string };
+}
+
 export interface Plugin {
   id: string;
   name: string;
@@ -32,6 +38,7 @@ export interface Plugin {
   commands?: Command[];
   actions?: PluginAction[];
   getActions?(): PluginAction[];
+  views?: PluginView[];
   tabTypes?: string[];
   onConfig?(config: Record<string, unknown>): Promise<Record<string, unknown>>;
   onReady?(ctx: PluginContext): Promise<void>;
@@ -95,5 +102,8 @@ export interface PluginContext {
     warning(message: string, meta?: { suggestion?: string; command?: string }): void;
     info(message: string, meta?: { suggestion?: string; command?: string }): void;
     success(message: string, meta?: { suggestion?: string; command?: string }): void;
+  };
+  views: {
+    register(type: string, component: ComponentType<{ state: Record<string, unknown> }>, meta: { label: string; icon: string }): void;
   };
 }

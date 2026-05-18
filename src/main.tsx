@@ -3,16 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { createRuntime, getAppWrappers } from './core/runtime';
 import { setRuntime } from './core/runtime/instance';
-import { fsPlugin } from './plugins/fs';
-import { searchPlugin } from './plugins/search';
-import { gitPlugin } from './plugins/git';
-import { taskPlugin } from './plugins/task';
-import { execPlugin } from './plugins/exec';
-import { browserPlugin } from './plugins/browser';
-import { aiPlugin } from './plugins/ai';
-import { helpPlugin } from './plugins/help';
-import { actionsPlugin } from './plugins/actions';
-import { feedbackPlugin } from './plugins/feedback';
+import { discoverPlugins } from './core/plugin-system/plugin-discovery';
 import './styles/global.css';
 
 function renderApp() {
@@ -33,7 +24,12 @@ function renderApp() {
 async function bootstrap() {
   const runtime = await createRuntime();
   setRuntime(runtime);
-  await runtime.init([fsPlugin, searchPlugin, gitPlugin, taskPlugin, execPlugin, browserPlugin, aiPlugin, helpPlugin, actionsPlugin, feedbackPlugin]);
+
+  const pluginModules = import.meta.glob('./plugins/*/index.ts', { eager: true });
+  const plugins = discoverPlugins(pluginModules);
+  console.log(`[BOOT] Discovered ${plugins.length} plugin(s): ${plugins.map(p => p.id).join(', ')}`);
+
+  await runtime.init(plugins);
   renderApp();
 }
 

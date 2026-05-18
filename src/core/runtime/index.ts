@@ -1,3 +1,4 @@
+import type { ComponentType } from 'react';
 import { registry } from '../commands/registry';
 import { PluginRegistry, PluginLoader, type PluginContext, type AppRenderContext, type CommandExecutedPayload } from '../plugin-system';
 import { eventBus } from '../events/event-bus';
@@ -45,7 +46,11 @@ function deriveCommandSuggestion(parsed: ParsedCommand, result: CommandResult): 
   return suggestion;
 }
 
-function createPluginContext(actionRegistry: ActionRegistry): PluginContext {
+function createPluginContext(
+  actionRegistry: ActionRegistry,
+  viewComponentMap: Record<string, ComponentType<{ state: Record<string, unknown> }>>,
+  viewMetaMap: Record<string, { label: string; icon: string }>,
+): PluginContext {
   return {
     commands: {
       register: (cmd: Command) => registry.register(cmd),
@@ -83,6 +88,13 @@ function createPluginContext(actionRegistry: ActionRegistry): PluginContext {
     actions: {
       register: (type: string, action: PluginAction) => actionRegistry.register(type, action),
     },
+    views: {
+      register(type, component, meta) {
+        viewComponentMap[type] = component;
+        viewMetaMap[type] = meta;
+        console.log('[RUNTIME] View registered: type=%s label=%s', type, meta.label);
+      },
+    },
     feedback: {
       error: (msg: string, meta) => {
         const event: FeedbackEvent = { level: 'error', message: msg, ...meta, dismissible: true };
@@ -114,6 +126,10 @@ export interface Runtime {
   pluginContext: PluginContext;
   actionRegistry: ActionRegistry;
   feedback: FeedbackService;
+  viewComponentMap: Record<string, ComponentType<{ state: Record<string, unknown> }>>;
+  viewMetaMap: Record<string, { label: string; icon: string }>;
+  resolveActionsForTabType(tabType: string | null): PluginAction[] | null;
+  matchAction(query: string, action: PluginAction): boolean;
   execute(parsed: ParsedCommand): Promise<CommandResult>;
   getAutocomplete(parsed: ParsedCommand): ReturnType<typeof executor.getAutocomplete>;
   init(plugins: import('../plugin-system/types').Plugin[]): Promise<void>;
@@ -124,14 +140,34 @@ export async function createRuntime(): Promise<Runtime> {
   console.log('[RUNTIME] createRuntime()');
   const actionRegistry = new ActionRegistry();
   const pluginRegistry = new PluginRegistry();
+  const viewComponentMap: Record<string, ComponentType<{ state: Record<string, unknown> }>> = {};
+  const viewMetaMap: Record<string, { label: string; icon: string }> = {};
   const feedbackService = new FeedbackService();
   eventBus.on('feedback', (payload) => {
     feedbackService.show(payload as FeedbackEvent);
   });
-  const pluginContext = createPluginContext(actionRegistry);
+  const pluginContext = createPluginContext(actionRegistry, viewComponentMap, viewMetaMap);
   const pluginLoader = new PluginLoader(pluginRegistry, pluginContext);
 
   const activePlugins = () => pluginRegistry.getActive();
+
+  const resolveActionsForTabType = (tabType: string | null) => {
+    if (!tabType) return null;
+    const plugin = pluginRegistry.getPluginByTabType(tabType);
+    if (!plugin) return null;
+    if (plugin.getActions) {
+      return plugin.getActions();
+    }
+    return plugin.actions ?? [];
+  };
+
+  const matchAction = (query: string, action: PluginAction) => {
+    const lower = query.toLowerCase();
+    if (action.id.toLowerCase().includes(lower)) return true;
+    if (action.title?.toLowerCase().includes(lower)) return true;
+    if (action.aliases?.some(a => a.toLowerCase().includes(lower))) return true;
+    return false;
+  };
 
   const runtime: Runtime = {
     pluginRegistry,
@@ -139,6 +175,10 @@ export async function createRuntime(): Promise<Runtime> {
     pluginContext,
     actionRegistry,
     feedback: feedbackService,
+    viewComponentMap,
+    viewMetaMap,
+    resolveActionsForTabType,
+    matchAction,
 
     async execute(parsed: ParsedCommand): Promise<CommandResult> {
       console.log('[RUNTIME] execute() called: name=%s args=%j type=%s', parsed.name, parsed.args, 'command');

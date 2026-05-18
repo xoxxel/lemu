@@ -1,13 +1,13 @@
 import { forwardRef } from 'react';
 import type { Tab } from '../core/tabs/types';
-import { viewComponentMap } from '../views';
+import { getRuntime } from '../core/runtime/instance';
 
 interface WorkspaceProps {
   activeTab: Tab | null;
 }
 
 function renderTabContent(tab: Tab): JSX.Element | null {
-  const Component = viewComponentMap[tab.type];
+  const Component = getRuntime().viewComponentMap[tab.type];
   if (!Component) return <div className="empty-state">No content for this tab type.</div>;
   return <Component state={tab.state ?? {}} />;
 }

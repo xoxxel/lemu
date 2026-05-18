@@ -21,7 +21,7 @@ Commands live in `src/plugins/*/` and register via the `Plugin` interface (`src/
 - `activate(ctx)` — called at load time; used to register commands via `ctx.commands.register(cmd)`
 - `onReady(ctx)`, `onCommandExecuted(payload)`, `onCleanup()` — optional lifecycle hooks
 
-Plugins are registered in `src/main.tsx:34` — add new plugins there.
+Plugins are auto-discovered via `import.meta.glob` — no manual registration needed.
 
 ### Input Routing
 
@@ -45,8 +45,16 @@ Plugins are registered in `src/main.tsx:34` — add new plugins there.
 - AI module is code-split (`dynamic import()` in ai-cmd.ts and agent-cmd.ts).
 - Filesystem endpoints validate paths via `path.resolve() + .startsWith(WORKSPACE)`.
 
+### Plugin Registration
+
+Plugins are auto-discovered via `import.meta.glob('./plugins/*/index.ts', { eager: true })` in `src/main.tsx`. The discovery function (`src/core/plugin-system/plugin-discovery.ts`) scans each module for exports matching the Plugin shape (duck-types `id`, `name`, `version`, `activate`). No manual registration needed.
+
+### Adding a New Plugin
+
+1. Create `src/plugins/<your-plugin>/index.ts` exporting a valid `Plugin` object
+2. Done — no other files need modification
+
 ### Adding a New Command
 
 1. Create file in `src/plugins/<your-plugin>/<cmd>.ts` implementing `Command` interface (`src/core/commands/types.ts`)
-2. Create or update plugin in `src/plugins/<your-plugin>/index.ts` that registers the command in `activate()`
-3. Import and pass the plugin in `src/main.tsx` bootstrap array
+2. Add it to the plugin's `commands` array or register in `activate()` via `ctx.commands.register(cmd)`

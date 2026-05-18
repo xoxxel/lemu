@@ -89,6 +89,13 @@ export class PluginLoader {
       }
     }
 
+    if (plugin.views) {
+      console.log('[PLUGIN_LOADER] Registering %d views for %s', plugin.views.length, plugin.id);
+      for (const view of plugin.views) {
+        this.ctx.views.register(view.type, view.component, view.meta);
+      }
+    }
+
     console.log('[PLUGIN_LOADER] Calling activate for %s', plugin.id);
     await plugin.activate(this.ctx);
     console.log('[PLUGIN_LOADER] activate complete for %s', plugin.id);

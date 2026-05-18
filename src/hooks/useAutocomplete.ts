@@ -3,7 +3,6 @@ import { parse } from '../core/parser';
 import { getRuntime } from '../core/runtime/instance';
 import { fuzzyMatch, sortByScore } from '../core/autocomplete';
 import { registry } from '../core/commands/registry';
-import { resolveActionsForTabType, matchAction } from '../plugins/actions';
 import type { AutocompleteItem } from '../core/commands/types';
 
 export function useAutocomplete(activeTabType: string | null) {
@@ -14,6 +13,9 @@ export function useAutocomplete(activeTabType: string | null) {
   const update = useCallback(async (input: string) => {
     if (input.startsWith('>')) {
       const query = input.slice(1).trim();
+      const runtime = getRuntime();
+      const resolveActionsForTabType = runtime.resolveActionsForTabType;
+      const matchAction = runtime.matchAction;
       const actions = resolveActionsForTabType(activeTabType);
       if (actions === null) {
         console.log('[ACTIONS] no active plugin for tab type:', activeTabType);

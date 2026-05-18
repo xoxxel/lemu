@@ -6,7 +6,7 @@ import { useAutocomplete } from './hooks/useAutocomplete';
 import { useTerminal } from './hooks/useTerminal';
 import type { Tab } from './core/tabs/types';
 import { createTabId } from './core/tabs/types';
-import { viewMeta } from './views';
+
 import type { FeedbackEvent } from './core/feedback/types';
 import Sidebar from './components/Sidebar';
 import Workspace from './components/Workspace';
@@ -75,6 +75,7 @@ export default function App() {
 
   const addTab = useCallback((type: string, title: string, path?: string, state?: Record<string, unknown>) => {
     const id = createTabId(type);
+    const viewMeta = getRuntime().viewMetaMap;
     const meta = viewMeta[type];
     const tab: Tab = {
       id,
@@ -257,6 +258,7 @@ export default function App() {
       if (result.success && result.data && typeof result.data === 'object') {
         const d = result.data as Record<string, unknown>;
         const dType = d.type as string | undefined;
+        const viewMeta = getRuntime().viewMetaMap;
         if (dType && viewMeta[dType]) {
           addTab(dType, `help: ${topic}`, undefined, d);
         }
@@ -291,6 +293,7 @@ export default function App() {
       if (result.success && result.data && typeof result.data === 'object') {
         const d = result.data as Record<string, unknown>;
         const dType = d.type as string | undefined;
+        const viewMeta = getRuntime().viewMetaMap;
         if (dType && viewMeta[dType]) {
           const title = (d.path as string) || (d.command as string) || parsed.name;
           addTab(dType, title, d.path as string | undefined, d);
