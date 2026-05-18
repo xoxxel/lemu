@@ -4,3 +4,6 @@
 [x]calculatorView
 []browser
 [X]move
+[X]git
+[X]run
+[]search

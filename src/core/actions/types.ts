@@ -2,9 +2,11 @@ export interface ActionContext {
   tabId: string | null
   tabType: string | null
   tabState: Record<string, unknown>
+  query: string
   pinned: boolean
   pin: () => void
   unpin: () => void
+  addTab?: (type: string, title: string, state?: Record<string, unknown>) => string | undefined
 }
 
 export interface PluginAction {

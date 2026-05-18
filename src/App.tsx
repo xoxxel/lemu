@@ -262,6 +262,11 @@ export default function App() {
         );
       }
       if (!action) {
+        const allActions = runtime.actionRegistry.getForType(activeTab.type);
+        const prefix = routedInput.split(' ')[0];
+        action = allActions.find(a => a.id === prefix);
+      }
+      if (!action) {
         addMessage('user', raw);
         addMessage('error', `No action '${routedInput}' for ${activeTab.type}. Type > to list available actions.`);
         runtime.feedback.show({
@@ -278,9 +283,12 @@ export default function App() {
         tabId: activeTab.id,
         tabType: activeTab.type,
         tabState: activeTab.state ?? {},
+        query: routedInput,
         pinned: pinnedTabs.has(activeTab.id),
         pin: () => togglePinTab(activeTab.id),
         unpin: () => togglePinTab(activeTab.id),
+        addTab: (type: string, title: string, state?: Record<string, unknown>) =>
+          addTab(type, title, undefined, state),
       };
       try {
         const result = await action.handler(ctx);
@@ -338,8 +346,16 @@ export default function App() {
         const d = result.data as Record<string, unknown>;
         const dType = d.type as string | undefined;
         if (dType && getRuntime().viewComponentMap[dType]) {
-          const title = (d.path as string) || (d.command as string) || parsed.name;
-          addTab(dType, title, d.path as string | undefined, d);
+          if (activeTab && activeTab.type === dType) {
+            setTabs((prev) => prev.map((t) =>
+              t.id === activeTab.id
+                ? { ...t, state: { ...t.state, ...d }, title: (d.path as string) || parsed.name }
+                : t
+            ));
+          } else {
+            const title = (d.path as string) || (d.command as string) || parsed.name;
+            addTab(dType, title, d.path as string | undefined, d);
+          }
         }
 
         const path = d.path as string | undefined;

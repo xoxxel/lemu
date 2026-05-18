@@ -8,65 +8,65 @@
 | `npm run build` | `tsc && vite build` |
 | `npm run dev:client` | Vite only |
 | `npm run dev:server` | `nodemon --exec tsx server/index.ts` |
+| `npm run preview` | `vite preview` |
 
-No lint, typecheck, test, or formatter commands exist.
+No lint, typecheck, test, or formatter commands exist. `test/` directory is empty.
 
-## Architecture
-
-**lemu** is a browser-based terminal workspace. React frontend (`src/`) + Express/WebSocket backend (`server/`). Vite proxies `/api` and `/ws` to the backend on port 3001.
-
-### Input Routing
-
-Input is classified by its first character by `src/core/input-router.ts`:
+## Input Routing (`src/core/input-router.ts`, `src/core/parser/index.ts`)
 
 | Input | Route |
 |-------|-------|
 | `/cmd args` | `classifyInput()` → command mode → `runtime.execute()` → command registry |
-| `!cmd args` | Parser → `{ name: 'run', args: ['cmd args'] }` → plugin exec |
+| `!cmd args` | Parser → `{ name: 'run', args: ['cmd args'] }` → exec plugin |
 | `@topic` | Help mode → `runtime.execute({ name: 'help', args: [topic] })` |
 | `>action` | Action mode → plugin action on active tab via action registry |
 | `:cmd` | Terminal mode → strips `:` → PTY shell session |
 | `plain text` | Tab mode → active tab's plugin `onInput()` or feedback |
 
-Only `/terminal` is hardcoded in `App.tsx` (for session management). All other `/cmd` routes go through plugins.
+Only `/terminal` is hardcoded in `App.tsx`. All other `/cmd` routes go through plugins.
 
-Terminal is no longer the default input owner. The active workspace tab owns input by default. Terminal requires explicit `:` prefix.
+## Plugins (10 total, auto-discovered via `import.meta.glob`)
 
-### Plugin System
+| ID | Commands | Views | Notes |
+|----|----------|-------|-------|
+| `ai` | `ai`, `agent` | `ai`, `agent` | `onInput` for chat; AI code-split (dynamic import, first use slow) |
+| `browser` | `browser` | `browser` | — |
+| `calculator` | `calculator` | `calculator` | `onInput`, `onCleanup` |
+| `exec` | `run` | `exec` | `!cmd` maps here |
+| `feedback` | — | — | no-op plugin |
+| `fs` | `open`, `copy`, `move`, `delete` | `editor` | `onCommandExecuted` |
+| `git` | `git` | `git`, `diff` | — |
+| `help` | `help` | `help` | — |
+| `search` | `search` | `search` | — |
+| `task` | `task` | `task` | `onConfig`, `onReady`, `onCleanup` |
 
-Commands live in `src/plugins/*/` and register via the `Plugin` interface (`src/core/plugin-system/types.ts`). Each plugin has:
+## Server (`server/index.ts`)
 
-Required:
-- `activate(ctx)` — register commands, actions, views via the context
+Express on port 3001. Workspace path from `LEMU_WORKSPACE` env var (falls back to `process.cwd()`). All filesystem endpoints validate paths via `path.resolve() + .startsWith(WORKSPACE)`.
 
-Optional lifecycle hooks: `deactivate(ctx)`, `onConfig(config)`, `onReady(ctx)`, `onAppRender(ctx)`, `onCommandExecuted(payload)`, `onInput(payload)`, `onCleanup()`
+- `GET /api/fs/list`, `/api/fs/read`, `/api/fs/tree`, `/api/fs/search`
+- `POST /api/fs/copy`, `/api/fs/move`, `/api/fs/delete`
+- `POST /api/shell/exec` (blocking `execSync`)
+- `GET /api/workspace`
+- `GET /preview/*`
+- WebSocket `/ws` for PTY I/O (node-pty, lazy sessions)
 
-Optional properties: `commands`, `actions`, `views`, `docs`
+Search is pure Node.js walk + `String.includes()` — no `grep` dependency.
 
-Views (`ctx.views.register(type, component, meta)`) create new tab types rendered via `runtime.viewComponentMap`. Actions (`ctx.actions.register(type, action)`) are invoked with `>action-name` when a matching tab is active.
+## Architecture Notes
 
-Plugins may implement `onInput(payload)` to accept direct input when their tab is active. If not implemented, the runtime shows feedback: "X does not accept direct input."
+- **Outdated docs**: `docs/ARCHITECTURE.md` and `architect.md` describe an old command system. Real system is `src/plugins/` + `src/core/plugin-system/`.
+- **All state is in-memory** — lost on page reload. No state management library (plain React).
+- **PTY sessions** are lazy-created on first `:` or shell command via client-side `ensureSession()`.
+- **AI module** is code-split (`dynamic import()`) — first use is slow.
+- **MCP tools** available in AI/agent: `read_file`, `list_directory`, `search_files`, `run_command`, `get_workspace_info`, `get_file_tree`.
 
-Plugins are auto-discovered via `import.meta.glob('./plugins/*/index.ts', { eager: true })` in `src/main.tsx` — no manual registration needed.
-
-### Key Architecture Notes
-
-- ARCHITECTURE.md describes an **outdated** command system (old `src/core/commands/` self-registration). The real system is the plugin architecture in `src/plugins/` + `src/core/plugin-system/`.
-- Server search (`/api/fs/search`) is pure Node.js walk + `String.includes()` — no `grep` dependency (contrary to ARCHITECTURE.md claims).
-- All state is in-memory. No persistence. Lost on page reload.
-- PTY sessions are lazy-created on first shell command or `:` prefix (client-side `ensureSession()`). No session on WebSocket connect.
-- AI module is code-split (`dynamic import()` in ai-cmd, agent-cmd, and ai onInput) — first use is slow.
-- Filesystem endpoints validate paths via `path.resolve() + .startsWith(WORKSPACE)`.
-- Feedback system (`src/core/feedback/`) emits events via event bus; App.tsx shows them in a FeedbackBar.
-- Tab pinning keeps tabs visible in sidebar even when not active.
-- Mode indicator in InputBar shows `[terminal]` when input starts with `:`, otherwise shows active tab label.
-
-### Adding a New Plugin
+## Adding a Plugin
 
 1. Create `src/plugins/<your-plugin>/index.ts` exporting a valid `Plugin` object
-2. Done — no other files need modification
+2. No other files need modification
 
-### Adding a New Command
+## Adding a Command
 
 1. Create file in `src/plugins/<your-plugin>/<cmd>.ts` implementing `Command` interface (`src/core/commands/types.ts`)
-2. Add it to the plugin's `commands` array or register in `activate()` via `ctx.commands.register(cmd)`
+2. Add it to the plugin's `commands` array or register via `ctx.commands.register(cmd)` in `activate()`
