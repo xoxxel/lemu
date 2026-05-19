@@ -1,4 +1,6 @@
 import type { Plugin, PluginContext } from './types';
+import { eventBus, DomainEventTypes } from '../events';
+import type { Intent } from '../pipeline/types';
 
 export class PluginRegistry {
   private plugins = new Map<string, Plugin>();
@@ -90,6 +92,13 @@ export class PluginLoader {
       for (const view of plugin.views) {
         this.ctx.views.register(view.type, view.component, view.meta);
       }
+    }
+
+    if (plugin.onEvent) {
+      const unsub = eventBus.onAny((event, payload) => {
+        plugin.onEvent!(event, payload).catch(() => {});
+      });
+      (plugin as unknown as Record<string, unknown>).__unsub = unsub;
     }
 
     console.log('[PLUGIN_LOADER] Calling activate for %s', plugin.id);

@@ -7,6 +7,7 @@ export type {
   UIService,
   CommandRegistry,
   StorageService,
+  AppContextService,
   CommandExecutedPayload,
   AppRenderContext,
   PluginInputPayload,

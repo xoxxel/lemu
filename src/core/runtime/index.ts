@@ -1,13 +1,18 @@
 import type { ComponentType } from 'react';
 import { registry } from '../commands/registry';
 import { PluginRegistry, PluginLoader, type PluginContext, type AppRenderContext, type CommandExecutedPayload, type PluginInputPayload, type PluginInputResult } from '../plugin-system';
-import { eventBus, RuntimeEventTypes } from '../events';
+import { eventBus, RuntimeEventTypes, DomainEventTypes } from '../events';
 import { executor } from '../executor';
 import { ActionRegistry } from '../actions';
 import { FeedbackService, type FeedbackEvent } from '../feedback';
 import { fuzzyMatch, sortByScore } from '../autocomplete';
 import type { Command, ParsedCommand, CommandResult } from '../commands/types';
 import type { PluginAction } from '../actions/types';
+import { appContext } from '../context';
+import { intentPipeline } from '../pipeline';
+import type { Intent } from '../pipeline/types';
+import { orchestrator } from '../orchestrator/orchestrator';
+import { editPipeline } from '../orchestrator';
 
 const appWrappers: unknown[] = [];
 
@@ -76,6 +81,7 @@ function createPluginContext(
       set() {},
       remove() {},
     },
+    context: appContext,
     ui: {
       showPanel() {},
       hidePanel() {},
@@ -135,6 +141,10 @@ export interface Runtime {
   processPluginInput(payload: PluginInputPayload): Promise<PluginInputResult | void>;
   init(plugins: import('../plugin-system/types').Plugin[]): Promise<void>;
   destroy(): Promise<void>;
+  submitIntent(intent: Omit<Intent, 'id' | 'timestamp'>): Promise<import('../pipeline/types').IntentRecord>;
+  getContext(): typeof appContext;
+  getPipeline(): typeof intentPipeline;
+  getEditPipeline(): typeof editPipeline;
 }
 
 export async function createRuntime(): Promise<Runtime> {
@@ -170,6 +180,15 @@ export async function createRuntime(): Promise<Runtime> {
     return false;
   };
 
+  const intents: Runtime['submitIntent'] = async (partial) => {
+    const intent: Intent = {
+      ...partial,
+      id: `intent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      timestamp: Date.now(),
+    };
+    return intentPipeline.submit(intent);
+  };
+
   const runtime: Runtime = {
     pluginRegistry,
     pluginLoader,
@@ -182,13 +201,13 @@ export async function createRuntime(): Promise<Runtime> {
     matchAction,
 
     async processPluginInput(payload: PluginInputPayload): Promise<PluginInputResult | void> {
-    const plugin = pluginRegistry.getPluginByTabType(payload.tabType);
-    if (!plugin || !plugin.onInput) return;
-    console.log('[RUNTIME] processPluginInput: tabType=%s input=%s', payload.tabType, payload.input);
-    return plugin.onInput(payload);
-  },
+      const plugin = pluginRegistry.getPluginByTabType(payload.tabType);
+      if (!plugin || !plugin.onInput) return;
+      console.log('[RUNTIME] processPluginInput: tabType=%s input=%s', payload.tabType, payload.input);
+      return plugin.onInput(payload);
+    },
 
-  async execute(parsed: ParsedCommand): Promise<CommandResult> {
+    async execute(parsed: ParsedCommand): Promise<CommandResult> {
       console.log('[RUNTIME] execute() called: name=%s args=%j type=%s', parsed.name, parsed.args, 'command');
       const active = activePlugins();
       console.log('[RUNTIME] Active plugins: %d', active.length);
@@ -265,8 +284,14 @@ export async function createRuntime(): Promise<Runtime> {
       return executor.getAutocomplete(parsed);
     },
 
+    submitIntent: intents,
+    getContext: () => appContext,
+    getPipeline: () => intentPipeline,
+    getEditPipeline: () => editPipeline,
+
     async init(plugins) {
       console.log('[RUNTIME] init() called with %d plugins', plugins.length);
+      await orchestrator.init();
       await pluginLoader.loadAll(plugins);
       console.log('[RUNTIME] All plugins loaded. Registry has %d commands', registry.getAll().length);
 
@@ -306,16 +331,13 @@ export async function createRuntime(): Promise<Runtime> {
     async destroy() {
       console.log('[RUNTIME] destroy()');
       feedbackService.destroy();
+      appContext.clear();
       for (const plugin of activePlugins()) {
         if (plugin.onCleanup) {
-          try {
-            await plugin.onCleanup();
-          } catch { /* isolate */ }
+          try { await plugin.onCleanup(); } catch { }
         }
         if (plugin.deactivate) {
-          try {
-            await plugin.deactivate(pluginContext);
-          } catch { /* isolate */ }
+          try { await plugin.deactivate(pluginContext); } catch { }
         }
       }
       appWrappers.length = 0;

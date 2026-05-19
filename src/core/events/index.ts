@@ -1,5 +1,5 @@
 export { EventBus, eventBus } from './event-bus';
-export { RuntimeEventTypes } from './types';
+export { RuntimeEventTypes, DomainEventTypes } from './types';
 export type {
   CommandStartEvent,
   CommandSuccessEvent,
@@ -12,4 +12,17 @@ export type {
   PluginErrorEvent,
   RuntimeEventPayload,
   RuntimeEventType,
+  DomainEventType,
+  UserIntentEvent,
+  FsOpenedEvent,
+  FsSavedEvent,
+  FsCopiedEvent,
+  FsMovedEvent,
+  FsDeletedEvent,
+  SearchStartedEvent,
+  SearchCompletedEvent,
+  EditProposedEvent,
+  EditAppliedEvent,
+  EditRejectedEvent,
+  AiSuggestionEvent,
 } from './types';

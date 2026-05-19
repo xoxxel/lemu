@@ -1,7 +1,6 @@
 import type { Plugin, PluginContext, CommandExecutedPayload } from '../../core/plugin-system/types';
 import { standardActions } from '../../core/actions';
-import { eventBus } from '../../core/events';
-import type { FsCopyEvent, FsMoveEvent, FsDeleteEvent, FsOpenEvent, FsErrorEvent } from './events';
+import { eventBus, DomainEventTypes } from '../../core/events';
 import openCommand from './open';
 import copyCommand from './copy';
 import moveCommand from './move';
@@ -39,24 +38,26 @@ export const fsPlugin: Plugin = {
     const { command, args, result } = payload;
 
     if (command === 'copy') {
-      eventBus.emit('fs:copy', {
+      eventBus.emit(DomainEventTypes.FsCopied, {
         timestamp: Date.now(),
         source: args[0],
         destination: args[1] || '(in-place)',
         success: result.success,
         error: result.success ? undefined : result.message,
-      } as FsCopyEvent);
+      });
+      eventBus.emit('fs:copy', { timestamp: Date.now(), source: args[0], destination: args[1] || '(in-place)', success: result.success, error: result.success ? undefined : result.message });
       return;
     }
 
     if (command === 'move') {
-      eventBus.emit('fs:move', {
+      eventBus.emit(DomainEventTypes.FsMoved, {
         timestamp: Date.now(),
         from: args[0],
         to: args[1],
         success: result.success,
         error: result.success ? undefined : result.message,
-      } as FsMoveEvent);
+      });
+      eventBus.emit('fs:move', { timestamp: Date.now(), from: args[0], to: args[1], success: result.success, error: result.success ? undefined : result.message });
       return;
     }
 
@@ -68,29 +69,18 @@ export const fsPlugin: Plugin = {
 
       if (result.success) {
         const kind = (result.data as Record<string, unknown> | undefined)?.kind as string | undefined || 'file';
-        eventBus.emit('fs:delete', {
-          timestamp: Date.now(),
-          path: cleanPath,
-          name,
-          kind: kind as 'file' | 'directory',
-          success: true,
-        } as FsDeleteEvent);
+        eventBus.emit(DomainEventTypes.FsDeleted, { timestamp: Date.now(), path: cleanPath, name, kind: kind as 'file' | 'directory', success: true });
+        eventBus.emit('fs:delete', { timestamp: Date.now(), path: cleanPath, name, kind: kind as 'file' | 'directory', success: true });
       } else {
-        eventBus.emit('fs:error', {
-          timestamp: Date.now(),
-          operation: 'delete',
-          path: cleanPath,
-          message: result.message,
-        } as FsErrorEvent);
+        eventBus.emit(DomainEventTypes.FsError, { timestamp: Date.now(), operation: 'delete', path: cleanPath, message: result.message });
+        eventBus.emit('fs:error', { timestamp: Date.now(), operation: 'delete', path: cleanPath, message: result.message });
       }
       return;
     }
 
     if (command === 'open' && result.success) {
-      eventBus.emit('fs:open', {
-        timestamp: Date.now(),
-        path: args[0],
-      } as FsOpenEvent);
+      eventBus.emit(DomainEventTypes.FsOpened, { timestamp: Date.now(), path: args[0] });
+      eventBus.emit('fs:open', { timestamp: Date.now(), path: args[0] });
       return;
     }
 

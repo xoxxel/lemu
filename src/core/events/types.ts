@@ -71,3 +71,116 @@ export const RuntimeEventTypes = {
 } as const;
 
 export type RuntimeEventType = (typeof RuntimeEventTypes)[keyof typeof RuntimeEventTypes];
+
+export const DomainEventTypes = {
+  // User intent
+  UserIntent: 'user:intent',
+
+  // File system events
+  FsOpened: 'fs:opened',
+  FsSaved: 'fs:saved',
+  FsCopied: 'fs:copied',
+  FsMoved: 'fs:moved',
+  FsDeleted: 'fs:deleted',
+  FsError: 'fs:error',
+
+  // Search events
+  SearchStarted: 'search:started',
+  SearchCompleted: 'search:completed',
+  SearchSelected: 'search:selected',
+
+  // Edit pipeline events
+  EditProposed: 'edit:proposed',
+  EditApplied: 'edit:applied',
+  EditRejected: 'edit:rejected',
+  EditReverted: 'edit:reverted',
+
+  // AI orchestration events
+  AiSuggestion: 'ai:suggestion',
+  AiApproved: 'ai:approved',
+  AiRejected: 'ai:rejected',
+  AiInferred: 'ai:inferred',
+
+  // Tab events
+  TabActivated: 'tab:activated',
+  TabStateChanged: 'tab:state-changed',
+} as const;
+
+export type DomainEventType = (typeof DomainEventTypes)[keyof typeof DomainEventTypes];
+
+export interface UserIntentEvent extends RuntimeEventBase {
+  input: string;
+  mode: string;
+  source: 'user' | 'ai' | 'plugin';
+}
+
+export interface FsOpenedEvent extends RuntimeEventBase {
+  path: string;
+}
+
+export interface FsSavedEvent extends RuntimeEventBase {
+  path: string;
+  previousContent: string;
+  newContent: string;
+}
+
+export interface FsCopiedEvent extends RuntimeEventBase {
+  source: string;
+  destination: string;
+  success: boolean;
+  error?: string;
+}
+
+export interface FsMovedEvent extends RuntimeEventBase {
+  from: string;
+  to: string;
+  success: boolean;
+  error?: string;
+}
+
+export interface FsDeletedEvent extends RuntimeEventBase {
+  path: string;
+  name: string;
+  kind: 'file' | 'directory';
+  success: boolean;
+  error?: string;
+}
+
+export interface SearchStartedEvent extends RuntimeEventBase {
+  query: string;
+  path?: string;
+}
+
+export interface SearchCompletedEvent extends RuntimeEventBase {
+  query: string;
+  results: number;
+  duration: number;
+}
+
+export interface EditProposedEvent extends RuntimeEventBase {
+  filePath: string;
+  originalContent: string;
+  proposedContent: string;
+  diff: string;
+  source: string;
+  suggestionId: string;
+}
+
+export interface EditAppliedEvent extends RuntimeEventBase {
+  filePath: string;
+  content: string;
+  suggestionId?: string;
+}
+
+export interface EditRejectedEvent extends RuntimeEventBase {
+  filePath: string;
+  suggestionId: string;
+  reason?: string;
+}
+
+export interface AiSuggestionEvent extends RuntimeEventBase {
+  type: string;
+  description: string;
+  payload: unknown;
+  suggestionId: string;
+}

@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 import type { Command } from '../commands/types';
 import type { PluginAction } from '../actions/types';
+import type { Intent } from '../pipeline/types';
 
 export interface CommandExecutedPayload {
   command: string;
@@ -63,6 +64,8 @@ export interface Plugin {
   onInput?(payload: PluginInputPayload): Promise<PluginInputResult | void>;
   onCleanup?(): Promise<void>;
   docs?: PluginDocs;
+  onEvent?(event: string, payload?: unknown): Promise<void>;
+  onIntent?(intent: Intent): Promise<Intent | null>;
 }
 
 export interface ShellService {
@@ -97,6 +100,14 @@ export interface CommandRegistry {
   getAll(): Command[];
 }
 
+export interface AppContextService {
+  get<T = unknown>(key: string): T | undefined;
+  set<T = unknown>(key: string, value: T): void;
+  remove(key: string): void;
+  has(key: string): boolean;
+  onChange(key: string, fn: (key: string, value: unknown, prev: unknown) => void): () => void;
+}
+
 export interface StorageService {
   get(key: string): unknown;
   set(key: string, value: unknown): void;
@@ -111,6 +122,7 @@ export interface PluginContext {
   storage: StorageService;
   ui: UIService;
   config: Record<string, unknown>;
+  context: AppContextService;
   actions: {
     register(type: string, action: import('../actions/types').PluginAction): void;
   };
