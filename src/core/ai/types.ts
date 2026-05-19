@@ -47,10 +47,13 @@ export interface StreamChunk {
 export interface AIProvider {
   readonly id: string;
   readonly name: string;
+  readonly model: string;
+  readonly endpoint: string;
   chat(messages: AIMessage[], options?: ChatOptions): Promise<AIMessage>;
   streamChat?(messages: AIMessage[], options?: ChatOptions): AsyncIterable<StreamChunk>;
   supportsStreaming(): boolean;
   supportsTools(): boolean;
+  checkHealth(): Promise<ProviderHealth>;
 }
 
 export interface ProviderDefinition {
@@ -60,6 +63,20 @@ export interface ProviderDefinition {
   endpoint?: string;
   defaultModel?: string;
   models?: string[];
+}
+
+export interface ProviderConfig {
+  apiKey?: string;
+  endpoint?: string;
+  model?: string;
+}
+
+export interface ProviderHealth {
+  ok: boolean;
+  latency?: number;
+  modelCount?: number;
+  models?: string[];
+  error?: string;
 }
 
 export interface ModelInfo {

@@ -1,4 +1,4 @@
-import type { AIProvider, AIMessage, ChatOptions, StreamChunk } from '../types';
+import type { AIProvider, AIMessage, ChatOptions, StreamChunk, ProviderHealth } from '../types';
 import type { MCPTool } from '../types';
 
 function buildToolsPayload(tools: MCPTool[]): Array<Record<string, unknown>> {
@@ -48,13 +48,35 @@ export function createOpenAIProvider(config: {
   maxTokens?: number;
 }): AIProvider {
   const endpoint = (config.endpoint || 'https://api.openai.com/v1').replace(/\/+$/, '');
+  const model = config.model || 'gpt-4o';
 
   const provider: AIProvider = {
     id: 'openai',
     name: 'OpenAI',
+    get model() { return model; },
+    get endpoint() { return endpoint; },
 
     supportsStreaming() { return true; },
     supportsTools() { return true; },
+
+    async checkHealth(): Promise<ProviderHealth> {
+      const start = Date.now();
+      try {
+        const res = await fetch(`${endpoint}/models`, {
+          headers: config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {},
+          signal: AbortSignal.timeout(5000),
+        });
+        if (!res.ok) {
+          const reason = res.status === 401 ? 'invalid-api-key' : `HTTP ${res.status}`;
+          return { ok: false, latency: Date.now() - start, error: reason };
+        }
+        const data = await res.json();
+        const models: string[] = (data.data as Array<{ id: string }> || []).map((m: { id: string }) => m.id);
+        return { ok: true, latency: Date.now() - start, modelCount: models.length, models };
+      } catch (err) {
+        return { ok: false, latency: Date.now() - start, error: err instanceof Error ? err.message : String(err) };
+      }
+    },
 
     async chat(messages, options) {
       const model = options?.model || config.model || 'gpt-4o';

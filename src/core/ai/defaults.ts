@@ -3,7 +3,21 @@ import { modelRegistry } from './model-registry';
 import { createOpenAIProvider } from './providers/openai';
 import { createOllamaProvider } from './providers/ollama';
 import { createAnthropicProvider } from './providers/anthropic';
-import type { ProviderDefinition } from './types';
+import type { ProviderConfig, ProviderDefinition } from './types';
+import { defaultAISettings, resolveProviderConfig, resolveDefaultProviderId } from './settings';
+
+const ALL_KNOWN_PROVIDERS = ['openai', 'anthropic', 'ollama'];
+
+function getResolvedConfig(id: string, overrides?: ProviderConfig): ProviderConfig {
+  const fromRegistry = resolveProviderConfig(id);
+  const fromDefaults = defaultAISettings.providers[id] || {};
+  const fromOverrides = overrides || {};
+  return {
+    endpoint: fromRegistry.endpoint || fromOverrides.endpoint || fromDefaults.endpoint,
+    model: fromRegistry.model || fromOverrides.model || fromDefaults.model,
+    apiKey: fromRegistry.apiKey || fromOverrides.apiKey || fromDefaults.apiKey,
+  };
+}
 
 export function registerDefaultProviders(defs?: ProviderDefinition[]): void {
   const envKey = (typeof window !== 'undefined'
@@ -12,57 +26,90 @@ export function registerDefaultProviders(defs?: ProviderDefinition[]): void {
     || import.meta.env.VITE_LEMU_AI_API_KEY as string
     || '';
 
-  const envEndpoint = import.meta.env.VITE_LEMU_AI_ENDPOINT as string || undefined;
-  const envModel = import.meta.env.VITE_LEMU_AI_MODEL as string || undefined;
+  const envEndpoint = import.meta.env.VITE_LEMU_AI_ENDPOINT as string | undefined;
+  const envModel = import.meta.env.VITE_LEMU_AI_MODEL as string | undefined;
 
   if (defs && defs.length > 0) {
     for (const def of defs) {
-      switch (def.id) {
-        case 'openai':
-          providerRegistry.register(def.id, createOpenAIProvider({
-            apiKey: def.apiKey || envKey,
-            endpoint: def.endpoint || envEndpoint,
-            model: def.defaultModel || envModel,
-          }), def);
-          break;
-        case 'anthropic':
-          providerRegistry.register(def.id, createAnthropicProvider({
-            apiKey: def.apiKey,
-            endpoint: def.endpoint,
-            model: def.defaultModel,
-          }), def);
-          break;
-        case 'ollama':
-          providerRegistry.register(def.id, createOllamaProvider({
-            endpoint: def.endpoint,
-            model: def.defaultModel,
-          }), def);
-          break;
-        default:
-          break;
-      }
+      const config = getResolvedConfig(def.id, {
+        apiKey: def.apiKey || envKey,
+        endpoint: def.endpoint || envEndpoint,
+        model: def.defaultModel || envModel,
+      });
+      registerSingleProvider(def.id, config, def);
     }
+    applyDefaultProvider();
     return;
   }
 
-  const openaiDef: ProviderDefinition = {
-    id: 'openai',
-    name: 'OpenAI',
-    endpoint: envEndpoint || 'https://api.openai.com/v1',
-    defaultModel: envModel || 'gpt-4o',
-  };
+  for (const id of ALL_KNOWN_PROVIDERS) {
+    const config = getResolvedConfig(id, {
+      apiKey: id === 'openai' ? envKey : undefined,
+      endpoint: id === 'openai' ? envEndpoint : undefined,
+      model: id === 'openai' ? envModel : undefined,
+    });
+    const def: ProviderDefinition = {
+      id,
+      name: id.charAt(0).toUpperCase() + id.slice(1),
+      endpoint: config.endpoint,
+      defaultModel: config.model,
+      apiKey: config.apiKey,
+    };
+    registerSingleProvider(id, config, def);
+  }
 
-  providerRegistry.register('openai', createOpenAIProvider({
-    apiKey: envKey,
-    endpoint: openaiDef.endpoint,
-    model: openaiDef.defaultModel,
-  }), openaiDef);
+  applyDefaultProvider();
+}
 
-  providerRegistry.register('ollama', createOllamaProvider({
-    endpoint: 'http://localhost:11434',
-  }), { id: 'ollama', name: 'Ollama', endpoint: 'http://localhost:11434', defaultModel: 'llama3' });
+function applyDefaultProvider(): void {
+  const defId = resolveDefaultProviderId();
+  if (defId && providerRegistry.has(defId)) {
+    providerRegistry.setDefaultProvider(defId);
+  } else if (providerRegistry.ids.length > 0) {
+    const first = providerRegistry.ids[0];
+    providerRegistry.setDefaultProvider(first);
+    console.log(`[AI] Default provider not found, falling back to first registered: ${first}`);
+  }
+}
 
-  providerRegistry.register('anthropic', createAnthropicProvider({
-    endpoint: 'https://api.anthropic.com/v1',
-  }), { id: 'anthropic', name: 'Anthropic', endpoint: 'https://api.anthropic.com/v1', defaultModel: 'claude-sonnet-4-20250514' });
+function registerSingleProvider(id: string, config: ProviderConfig, def: ProviderDefinition): void {
+  const resolvedEndpoint = config.endpoint || def.endpoint || '';
+  const resolvedModel = config.model || def.defaultModel || '';
+
+  switch (id) {
+    case 'openai':
+      providerRegistry.register(id, createOpenAIProvider({
+        apiKey: config.apiKey,
+        endpoint: resolvedEndpoint,
+        model: resolvedModel,
+      }), { ...def, endpoint: resolvedEndpoint, defaultModel: resolvedModel, apiKey: config.apiKey });
+      break;
+    case 'anthropic':
+      providerRegistry.register(id, createAnthropicProvider({
+        apiKey: config.apiKey,
+        endpoint: resolvedEndpoint,
+        model: resolvedModel,
+      }), { ...def, endpoint: resolvedEndpoint, defaultModel: resolvedModel, apiKey: config.apiKey });
+      break;
+    case 'ollama':
+      providerRegistry.register(id, createOllamaProvider({
+        endpoint: resolvedEndpoint,
+        model: resolvedModel,
+      }), { ...def, endpoint: resolvedEndpoint, defaultModel: resolvedModel });
+      break;
+    default:
+      break;
+  }
+}
+
+export function reconfigureProvider(id: string): void {
+  const config = getResolvedConfig(id);
+  const def: ProviderDefinition = { id, name: id.charAt(0).toUpperCase() + id.slice(1), ...config };
+  registerSingleProvider(id, config, def);
+}
+
+export function reconfigureAllProviders(): void {
+  for (const id of providerRegistry.ids) {
+    reconfigureProvider(id);
+  }
 }

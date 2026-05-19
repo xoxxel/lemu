@@ -4,6 +4,7 @@ export interface ClassifiedInput {
   mode: InputMode;
   input: string;
   raw: string;
+  global?: boolean;
 }
 
 export function classifyInput(raw: string): ClassifiedInput {
@@ -12,6 +13,10 @@ export function classifyInput(raw: string): ClassifiedInput {
 
   if (trimmed.startsWith('/') || trimmed.startsWith('!')) {
     return { mode: 'command', input: trimmed, raw };
+  }
+
+  if (trimmed.startsWith('*>')) {
+    return { mode: 'action', input: trimmed.slice(2).trim(), raw, global: true };
   }
 
   if (trimmed.startsWith('>')) {

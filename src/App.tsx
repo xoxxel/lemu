@@ -24,6 +24,10 @@ import './styles/app.css';
 
 function applyAutocomplete(input: string, selected: string): string {
   const trimmed = input.trim();
+  if (trimmed.startsWith('*>')) {
+    const after = selected.startsWith('*>') ? selected.slice(2) : selected;
+    return '*>' + after + ' ';
+  }
   if (trimmed.startsWith('@') || trimmed.startsWith('>')) {
     return selected + ' ';
   }
@@ -232,61 +236,91 @@ export default function App() {
     clearAutocomplete();
 
     if (mode === 'action') {
+      const isGlobal = classified.global === true;
+      const runtime = getRuntime();
+
       if (!routedInput) {
         addMessage('user', raw);
-        const actions = activeTab
-          ? getRuntime().actionRegistry.getForType(activeTab.type)
-          : [];
-        let body: string;
-        if (actions.length === 0) {
-          body = activeTab
-            ? `  No actions for ${activeTab.type}`
-            : '  No active tab. Open a file or view first.';
+        const globalActions = runtime.actionRegistry.getForType('*');
+        if (isGlobal || !activeTab) {
+          const body = globalActions.length > 0
+            ? globalActions.map(a => `  *>${a.id}  ${a.title ?? ''}`).join('\n')
+            : '  No global actions available.';
+          addMessage('system', `Global actions:\n${body}`);
         } else {
-          body = actions.map(a => `  ${a.id}  ${a.title ?? ''}`).join('\n');
+          const tabActions = runtime.actionRegistry.getForType(activeTab.type);
+          const body = tabActions.length > 0
+            ? tabActions.map(a => `  >${a.id}  ${a.title ?? ''}`).join('\n')
+            : `  No actions for ${activeTab.type}`;
+          addMessage('system', `Actions for ${activeTab.type}:\n${body}`);
+          if (globalActions.length > 0) {
+            addMessage('system', `Global actions (use *>):\n${globalActions.map(a => `  *>${a.id}  ${a.title ?? ''}`).join('\n')}`);
+          }
         }
-        addMessage('system', `Available actions:\n${body}`);
         return;
       }
-      if (!activeTab) {
+
+      let action: import('./core/actions/types').PluginAction | undefined;
+
+      if (isGlobal) {
+        action = runtime.actionRegistry.findByTypeAndId('*', routedInput);
+        if (!action) {
+          const globalActions = runtime.actionRegistry.getForType('*');
+          const prefix = routedInput.split(' ')[0];
+          action = globalActions.find(a =>
+            a.aliases?.some(al => al.toLowerCase() === routedInput.toLowerCase())
+          ) || globalActions.find(a => a.id === prefix);
+        }
+      } else {
+        action = runtime.actionRegistry.findByTypeAndId('*', routedInput);
+        if (!action) {
+          const globalActions = runtime.actionRegistry.getForType('*');
+          const prefix = routedInput.split(' ')[0];
+          action = globalActions.find(a =>
+            a.aliases?.some(al => al.toLowerCase() === routedInput.toLowerCase())
+          ) || globalActions.find(a => a.id === prefix);
+        }
+        if (!action && activeTab) {
+          action = runtime.actionRegistry.findByTypeAndId(activeTab.type, routedInput);
+          if (!action) {
+            const allActions = runtime.actionRegistry.getForType(activeTab.type);
+            action = allActions.find(a =>
+              a.aliases?.some(al => al.toLowerCase() === routedInput.toLowerCase())
+            );
+          }
+          if (!action) {
+            const allActions = runtime.actionRegistry.getForType(activeTab.type);
+            const prefix = routedInput.split(' ')[0];
+            action = allActions.find(a => a.id === prefix);
+          }
+        }
+      }
+
+      if (!action) {
         addMessage('user', raw);
-        addMessage('error', 'No active tab. Open a file or view first.');
-        return;
-      }
-      const runtime = getRuntime();
-      let action = runtime.actionRegistry.findByTypeAndId(activeTab.type, routedInput);
-      if (!action) {
-        const allActions = runtime.actionRegistry.getForType(activeTab.type);
-        action = allActions.find(a =>
-          a.aliases?.some(al => al.toLowerCase() === routedInput.toLowerCase())
-        );
-      }
-      if (!action) {
-        const allActions = runtime.actionRegistry.getForType(activeTab.type);
-        const prefix = routedInput.split(' ')[0];
-        action = allActions.find(a => a.id === prefix);
-      }
-      if (!action) {
-        addMessage('user', raw);
-        addMessage('error', `No action '${routedInput}' for ${activeTab.type}. Type > to list available actions.`);
+        const hint = isGlobal ? 'Type *> to list global actions.'
+          : `Type > to list actions for ${activeTab?.type ?? 'this tab'} or *> for global actions.`;
+        addMessage('error', `No action '${routedInput}'. ${hint}`);
         runtime.feedback.show({
           level: 'error',
-          message: `No action '${routedInput}' for ${activeTab.type}`,
-          suggestion: 'Type > to list available actions',
+          message: `No action '${routedInput}'`,
+          suggestion: hint,
           dismissible: true,
         });
         return;
       }
+
       console.log('[ACTIONS] selected:', action.id);
       addMessage('user', raw);
+      const tab = activeTab;
       const ctx = {
-        tabId: activeTab.id,
-        tabType: activeTab.type,
-        tabState: activeTab.state ?? {},
+        tabId: tab?.id ?? null,
+        tabType: tab?.type ?? null,
+        tabState: tab?.state ?? {},
         query: routedInput,
-        pinned: pinnedTabs.has(activeTab.id),
-        pin: () => togglePinTab(activeTab.id),
-        unpin: () => togglePinTab(activeTab.id),
+        pinned: tab ? pinnedTabs.has(tab.id) : false,
+        pin: () => tab && togglePinTab(tab.id),
+        unpin: () => tab && togglePinTab(tab.id),
         addTab: (type: string, title: string, state?: Record<string, unknown>) =>
           addTab(type, title, undefined, state),
       };
@@ -401,7 +435,7 @@ export default function App() {
     if (getRuntime().feedback.currentFeedback) {
       getRuntime().feedback.clear();
     }
-    if (value.startsWith('/') || value.startsWith('>') || value.startsWith('@')) {
+    if (value.startsWith('/') || value.startsWith('>') || value.startsWith('*>') || value.startsWith('@')) {
       updateAutocomplete(value);
     } else {
       clearAutocomplete();

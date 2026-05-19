@@ -18,7 +18,7 @@ export const coderSettingsSchema: PluginSettingsSchema = {
     type: 'string',
     label: 'Model',
     description: 'Model name (empty = provider default)',
-    placeholder: 'gpt-4o',
+    placeholder: 'qwen2.5-coder:7b',
   },
   maxTokens: {
     type: 'number',

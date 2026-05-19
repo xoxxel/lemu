@@ -6,10 +6,8 @@ export const coderManifest: PluginManifest = {
   dependencies: ['edit'],
   services: {
     llm: {
-      type: 'openai',
+      type: 'custom',
       required: true,
-      defaultEndpoint: 'https://api.openai.com/v1',
-      defaultModel: 'gpt-4o',
     },
   },
 };

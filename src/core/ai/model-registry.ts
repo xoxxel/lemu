@@ -67,6 +67,9 @@ function registerBuiltinModels(): void {
     { id: 'mistral', provider: 'ollama', name: 'Mistral', maxTokens: 8192, supportsTools: false, supportsStreaming: false },
     { id: 'codellama', provider: 'ollama', name: 'CodeLlama', maxTokens: 16384, supportsTools: false, supportsStreaming: false },
     { id: 'deepseek-coder-v2', provider: 'ollama', name: 'DeepSeek Coder V2', maxTokens: 16384, supportsTools: false, supportsStreaming: false },
+    { id: 'qwen2.5-coder:7b', provider: 'ollama', name: 'Qwen 2.5 Coder 7B', maxTokens: 32768, supportsTools: false, supportsStreaming: false },
+    { id: 'qwen2.5-coder:14b', provider: 'ollama', name: 'Qwen 2.5 Coder 14B', maxTokens: 32768, supportsTools: false, supportsStreaming: false },
+    { id: 'qwen2.5-coder:32b', provider: 'ollama', name: 'Qwen 2.5 Coder 32B', maxTokens: 32768, supportsTools: false, supportsStreaming: false },
   ];
 
   for (const model of models) {

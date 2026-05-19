@@ -13,9 +13,12 @@ import { intentPipeline } from '../pipeline';
 import type { Intent } from '../pipeline/types';
 import { orchestrator } from '../orchestrator/orchestrator';
 import { editPipeline } from '../orchestrator';
-import { providerRegistry, modelRegistry, registerDefaultProviders } from '../ai';
+import { providerRegistry, modelRegistry, registerDefaultProviders, applyAISettingsFromRegistry, applyProviderSettings, resolveProviderConfig, resolveDefaultProviderId } from '../ai';
 import type { ProviderRegistry } from '../ai/provider-registry';
 import type { ModelRegistry } from '../ai/model-registry';
+import type { ProviderConfig } from '../ai/types';
+import type { SettingsScope } from '../settings/types';
+import { registerRuntimeSettings, settingsRegistry } from '../settings';
 
 const appWrappers: unknown[] = [];
 
@@ -154,6 +157,130 @@ export interface Runtime {
   getAIModelRegistry(): ModelRegistry;
 }
 
+// ---------------------------------------------------------------------------
+// Provider diagnostics helpers
+// ---------------------------------------------------------------------------
+
+function formatDefaultProviderLabel(id: string): string {
+  const defId = providerRegistry.getDefaultProviderId();
+  return id === defId ? '* ' : '  ';
+}
+
+function providerStatusBadge(p: { id: string }): string {
+  const provider = providerRegistry.get(p.id);
+  if (!provider) return 'unregistered';
+  return 'registered';
+}
+
+function padRight(s: string, len: number): string {
+  return (s + ' '.repeat(len)).slice(0, len);
+}
+
+async function formatProviderTable(): Promise<string> {
+  const defId = providerRegistry.getDefaultProviderId();
+  const lines: string[] = [];
+  lines.push('Provider     Status          Default  Endpoint                              Model');
+  lines.push('-'.repeat(90));
+
+  for (const id of providerRegistry.ids) {
+    const provider = providerRegistry.get(id);
+    const def = providerRegistry.getDefinition(id);
+    const isDefault = id === defId;
+    const endpoint = def?.endpoint ?? '?';
+    const model = def?.defaultModel ?? '?';
+    const regStatus = provider ? 'registered' : 'missing';
+
+    const marker = isDefault ? '* ' : '  ';
+    const idPart = padRight(id, 13);
+    const status = regStatus === 'registered' ? 'registered' : 'missing';
+    const statusPart = padRight(status, 16);
+    const defPart = isDefault ? 'yes       ' : 'no        ';
+    const epPart = padRight(endpoint, 39);
+    lines.push(`${marker}${idPart}${statusPart}${defPart}${epPart}${model}`);
+  }
+
+  lines.push('');
+  lines.push('Commands:');
+  lines.push('  *>providers ping <id>        Check provider connectivity');
+  lines.push('  *>providers models <id>       List available models');
+  lines.push('  *>providers set-default <id>  Change default provider');
+  lines.push('  *>providers reload [id]       Re-read settings for provider(s)');
+
+  return lines.join('\n');
+}
+
+async function handleProviderPing(targetId: string): Promise<string> {
+  const id = targetId || providerRegistry.getDefaultProviderId() || 'ollama';
+  const provider = providerRegistry.get(id);
+  if (!provider) {
+    return [
+      'Provider Error:',
+      `  provider: ${id}`,
+      `  reason: not registered`,
+    ].join('\n');
+  }
+
+  const def = providerRegistry.getDefinition(id);
+  const endpoint = def?.endpoint ?? provider.endpoint;
+  const model = def?.defaultModel ?? provider.model;
+
+  const health = await provider.checkHealth();
+  if (health.ok) {
+    return [
+      `Provider:   ${id}`,
+      `Status:     connected`,
+      `Endpoint:   ${endpoint}`,
+      `Model:      ${model}`,
+      `Latency:    ${health.latency}ms`,
+      `Models:     ${health.modelCount ?? '?'} available`,
+      health.models && health.models.length > 0 ? `  (${health.models.slice(0, 5).join(', ')}${health.models.length > 5 ? `... +${health.models.length - 5} more` : ''})` : '',
+      health.error ? `Warning:    ${health.error}` : '',
+    ].filter(Boolean).join('\n');
+  }
+
+  return [
+    'Provider Error:',
+    `  provider: ${id}`,
+    `  endpoint: ${endpoint}`,
+    `  reason:   ${health.error || 'unknown'}`,
+    `  latency:  ${health.latency}ms`,
+  ].join('\n');
+}
+
+function handleProviderModels(targetId: string): string {
+  const id = targetId || providerRegistry.getDefaultProviderId() || 'ollama';
+  const def = providerRegistry.getDefinition(id);
+  if (!def) return `Provider '${id}' not registered.`;
+
+  const allModels = modelRegistry.getByProvider(id);
+  const lines: string[] = [`Models for ${id}:`];
+  if (allModels.length > 0) {
+    for (const m of allModels) {
+      lines.push(`  ${m.id.padEnd(25)} ${m.name.padEnd(35)} maxTokens:${(m.maxTokens ?? '?').toString().padEnd(6)} tools:${m.supportsTools ? 'yes' : 'no '}`);
+    }
+  } else {
+    lines.push('  (no models in registry for this provider)');
+  }
+  lines.push('');
+  lines.push('Use *>providers ping <id> to query live models from the provider endpoint.');
+  return lines.join('\n');
+}
+
+function handleSetDefaultProvider(targetId: string): string {
+  if (!targetId) return 'Usage: *>providers set-default <provider-id>';
+  if (!providerRegistry.has(targetId)) return `Provider '${targetId}' not registered.`;
+  providerRegistry.setDefaultProvider(targetId);
+  settingsRegistry.set('ai.defaultProvider', targetId);
+  return `Default provider set to '${targetId}'.`;
+}
+
+function handleReloadProviders(): string {
+  applyAISettingsFromRegistry();
+  return 'AI provider settings re-applied from registry.';
+}
+
+// ---------------------------------------------------------------------------
+
 export async function createRuntime(): Promise<Runtime> {
   console.log('[RUNTIME] createRuntime()');
   const actionRegistry = new ActionRegistry();
@@ -187,6 +314,58 @@ export async function createRuntime(): Promise<Runtime> {
     return false;
   };
 
+  const globalActions: PluginAction[] = [
+    {
+      id: 'settings',
+      title: 'Open Settings',
+      description: 'Open the runtime settings tab',
+      handler: async (ctx) => {
+        ctx.addTab?.('settings', 'Settings', {});
+        return 'Opened settings tab. Use j/k to navigate, Enter to edit, >filter to narrow.';
+      },
+    },
+    {
+      id: 'new-session',
+      title: 'New Terminal Session',
+      description: 'Create a new terminal session',
+      aliases: ['terminal', 'session'],
+      handler: async () => {
+        return 'Use :bash to start a new terminal session.';
+      },
+    },
+    {
+      id: 'providers',
+      title: 'AI Provider Diagnostics',
+      description: 'Show provider status, ping, models, set-default. Usage: *>providers [ping|models|set-default|reload] [id]',
+      aliases: ['ai-status', 'provider'],
+      handler: async (ctx) => {
+        const query = (ctx.query || '').trim();
+        const parts = query.split(/\s+/);
+        const subCmd = parts[0]?.toLowerCase();
+        const subArg = parts.slice(1).join(' ');
+
+        if (subCmd === 'ping') return handleProviderPing(subArg);
+        if (subCmd === 'models') return handleProviderModels(subArg);
+        if (subCmd === 'set-default' && subArg) return handleSetDefaultProvider(subArg);
+        if (subCmd === 'reload') return handleReloadProviders();
+        return formatProviderTable();
+      },
+    },
+    {
+      id: 'reload',
+      title: 'Reload Runtime',
+      description: 'Re-read settings and refresh runtime state',
+      handler: async () => {
+        applyAISettingsFromRegistry();
+        return 'Runtime settings re-applied from registry.';
+      },
+    },
+  ];
+
+  for (const action of globalActions) {
+    actionRegistry.register('*', action);
+  }
+
   const intents: Runtime['submitIntent'] = async (partial) => {
     const intent: Intent = {
       ...partial,
@@ -195,6 +374,17 @@ export async function createRuntime(): Promise<Runtime> {
     };
     return intentPipeline.submit(intent);
   };
+
+  // Subscribe to settings:changed to auto-update provider configs
+  eventBus.on('settings:changed', (payload) => {
+    const ev = payload as { key: string; value: unknown; scope: SettingsScope };
+    if (ev.key.startsWith('providers.')) {
+      const providerId = ev.key.split('.')[1];
+      applyProviderSettings(providerId);
+    } else if (ev.key === 'ai.defaultProvider') {
+      applyAISettingsFromRegistry();
+    }
+  });
 
   const runtime: Runtime = {
     pluginRegistry,
@@ -299,7 +489,9 @@ export async function createRuntime(): Promise<Runtime> {
     getAIModelRegistry: () => modelRegistry,
 
     async init(plugins) {
+      registerRuntimeSettings();
       registerDefaultProviders();
+      applyAISettingsFromRegistry();
       console.log('[RUNTIME] init() called with %d plugins', plugins.length);
       await orchestrator.init();
       await pluginLoader.loadAll(plugins);

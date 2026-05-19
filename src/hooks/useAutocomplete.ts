@@ -11,26 +11,44 @@ export function useAutocomplete(activeTabType: string | null) {
   const [statusText, setStatusText] = useState<string | null>(null);
 
   const update = useCallback(async (input: string) => {
+    const runtime = getRuntime();
+
+    if (input.startsWith('*>')) {
+      const query = input.slice(2).trim();
+      const globalActions = runtime.actionRegistry.getForType('*');
+      const matched = query
+        ? globalActions.filter(a => runtime.matchAction(query, a))
+        : globalActions;
+      const seen = new Set<string>();
+      const items: AutocompleteItem[] = [];
+      for (const a of matched) {
+        const val = '*>' + a.id;
+        if (seen.has(val)) continue;
+        seen.add(val);
+        items.push({ value: val, description: a.title ?? a.description ?? a.id, type: 'action' as const });
+      }
+      setSuggestions(items);
+      setStatusText(null);
+      setSelectedIndex(0);
+      return;
+    }
+
     if (input.startsWith('>')) {
       const query = input.slice(1).trim();
-      const runtime = getRuntime();
-      const resolveActionsForTabType = runtime.resolveActionsForTabType;
-      const matchAction = runtime.matchAction;
-      const actions = resolveActionsForTabType(activeTabType);
-      if (actions === null) {
+      const allActions = runtime.resolveActionsForTabType(activeTabType);
+      const globalActions = runtime.actionRegistry.getForType('*');
+      const merged = [...(allActions || []), ...globalActions];
+      const unique = merged.filter((a, i, arr) => arr.findIndex(x => x.id === a.id) === i);
+
+      if (query === '' && unique.length === 0) {
         setSuggestions([]);
-        setStatusText('No active plugin tab');
-        return;
-      }
-      if (actions.length === 0) {
-        setSuggestions([]);
-        setStatusText('No actions available');
+        setStatusText(activeTabType ? `No actions for ${activeTabType}` : 'No active tab');
         return;
       }
 
       const matched = query
-        ? actions.filter(a => matchAction(query, a))
-        : actions;
+        ? unique.filter(a => runtime.matchAction(query, a))
+        : unique;
 
       const items: AutocompleteItem[] = matched.map(a => ({
         value: '>' + a.id,

@@ -1,10 +1,9 @@
 import type { PluginSettings, PluginSettingsSchema } from '../../core/plugin-system/types';
 
 export const aiDefaultSettings: PluginSettings = {
+  defaultProvider: 'ollama',
   maxAgentIterations: 25,
   maxTokens: 4096,
-  model: 'gpt-4o',
-  endpoint: 'https://api.openai.com/v1',
 };
 
 export const aiSettingsSchema: PluginSettingsSchema = {
