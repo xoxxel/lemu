@@ -82,6 +82,8 @@ function createPluginContext(
       remove() {},
     },
     context: appContext,
+    getSettings: <T>() => ({}) as T,
+    api: { call() { throw new Error('API not available (no manifest.apis)'); }, getUrl() { throw new Error('API not available (no manifest.apis)'); } },
     ui: {
       showPanel() {},
       hidePanel() {},

@@ -7,8 +7,7 @@ function isPluginObject(value: unknown): value is Plugin {
     typeof obj.id === 'string' &&
     obj.id.length > 0 &&
     typeof obj.name === 'string' &&
-    typeof obj.version === 'string' &&
-    typeof obj.activate === 'function'
+    typeof obj.version === 'string'
   );
 }
 

@@ -1,7 +1,9 @@
-import type { Plugin, PluginContext, PluginInputPayload, PluginInputResult } from '../../core/plugin-system/types';
+import type { Plugin, PluginInputPayload, PluginInputResult } from '../../core/plugin-system/types';
 import aiCommand from './ai-cmd';
 import agentCommand from './agent-cmd';
 import { AIChatView } from './AIChatView';
+import { aiManifest } from './manifest';
+import { aiDefaultSettings, aiSettingsSchema } from './settings';
 
 export const aiPlugin: Plugin = {
   id: 'ai',
@@ -9,6 +11,9 @@ export const aiPlugin: Plugin = {
   version: '0.1.0',
   description: 'AI and agent commands',
   commands: [aiCommand, agentCommand],
+  manifest: aiManifest,
+  settings: aiDefaultSettings,
+  settingsSchema: aiSettingsSchema,
   views: [
     {
       type: 'ai',
@@ -44,9 +49,4 @@ export const aiPlugin: Plugin = {
     return { message: result.message, state: (result.data as Record<string, unknown>) ?? {} };
   },
 
-  async activate(ctx: PluginContext) {
-    for (const cmd of this.commands!) {
-      ctx.commands.register(cmd);
-    }
-  },
 };

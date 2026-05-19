@@ -1,7 +1,9 @@
-import type { Plugin, PluginContext } from '../../core/plugin-system/types';
+import type { Plugin } from '../../core/plugin-system/types';
 import { standardActions } from '../../core/actions';
 import helpCommand from './help';
 import { HelpView } from './HelpView';
+import { helpManifest } from './manifest';
+import { helpDefaultSettings, helpSettingsSchema } from './settings';
 
 export const helpPlugin: Plugin = {
   id: 'help',
@@ -9,6 +11,9 @@ export const helpPlugin: Plugin = {
   version: '0.1.0',
   description: 'Built-in documentation and help system',
   commands: [helpCommand],
+  manifest: helpManifest,
+  settings: helpDefaultSettings,
+  settingsSchema: helpSettingsSchema,
   actions: standardActions,
   views: [
     {
@@ -17,11 +22,6 @@ export const helpPlugin: Plugin = {
       meta: { label: 'Help', icon: '?' },
     },
   ],
-  async activate(ctx: PluginContext) {
-    for (const cmd of this.commands!) {
-      ctx.commands.register(cmd);
-    }
-  },
   docs: {
     overview: 'The Help System provides dynamically-generated documentation for all plugins and commands. Content is generated from plugin manifests, never hardcoded.',
     examples: '  /help\n  /help fs\n  /help open\n  /help search',

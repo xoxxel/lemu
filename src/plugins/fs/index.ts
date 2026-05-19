@@ -1,4 +1,4 @@
-import type { Plugin, PluginContext, CommandExecutedPayload } from '../../core/plugin-system/types';
+import type { Plugin, CommandExecutedPayload } from '../../core/plugin-system/types';
 import { standardActions } from '../../core/actions';
 import { eventBus, DomainEventTypes } from '../../core/events';
 import openCommand from './open';
@@ -6,6 +6,8 @@ import copyCommand from './copy';
 import moveCommand from './move';
 import deleteCommand from './delete';
 import { EditorView } from './EditorView';
+import { fsManifest } from './manifest';
+import { fsDefaultSettings, fsSettingsSchema } from './settings';
 
 export const fsPlugin: Plugin = {
   id: 'fs',
@@ -21,6 +23,9 @@ export const fsPlugin: Plugin = {
       meta: { label: 'Editor', icon: '\uD83D\uDCC4' },
     },
   ],
+  manifest: fsManifest,
+  settings: fsDefaultSettings,
+  settingsSchema: fsSettingsSchema,
   docs: {
     overview: 'The Filesystem plugin provides basic file and directory operations. All operations go through the server REST API and are validated against path traversal attacks.',
     examples: '  /open package.json\n  /copy file.ts file.backup.ts\n  /move old.ts new.ts\n  /delete -f temp.log',
@@ -28,11 +33,6 @@ export const fsPlugin: Plugin = {
     troubleshooting: '  "Path outside workspace" — the path resolved outside the allowed workspace directory.\n  "ENOENT" — the file or parent directory does not exist.\n  "EISDIR" — expected a file but got a directory.',
     tips: '  Use /open to quickly view files without leaving the keyboard.\n  /delete always requires -f flag as a safety measure.\n  Use tab completion for file paths.',
     limitations: '  No undo for delete. Once deleted with -f, the file is permanently removed.\n  No file watching — editor tabs show a snapshot, not live content.',
-  },
-  async activate(ctx: PluginContext) {
-    for (const cmd of this.commands!) {
-      ctx.commands.register(cmd);
-    }
   },
   onCommandExecuted: async (payload: CommandExecutedPayload) => {
     const { command, args, result } = payload;

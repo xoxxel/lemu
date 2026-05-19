@@ -1,9 +1,11 @@
-import type { Plugin, PluginContext, PluginInputPayload, PluginInputResult } from '../../core/plugin-system/types';
+import type { Plugin, PluginInputPayload, PluginInputResult } from '../../core/plugin-system/types';
 import type { PluginAction } from '../../core/actions/types';
 import type { SearchResult } from './search';
 import { getRuntime } from '../../core/runtime/instance';
 import searchCommand, { performSearch } from './search';
 import { SearchResultsView } from './SearchResultsView';
+import { searchManifest } from './manifest';
+import { searchDefaultSettings, searchSettingsSchema } from './settings';
 
 function findResultById(results: SearchResult[], query: string): { row: number; result: SearchResult } | null {
   const parts = query.split(' ');
@@ -66,6 +68,9 @@ export const searchPlugin: Plugin = {
   version: '0.1.0',
   description: 'Search file contents for patterns',
   commands: [searchCommand],
+  manifest: searchManifest,
+  settings: searchDefaultSettings,
+  settingsSchema: searchSettingsSchema,
   actions: [openAction, copyAction],
   views: [
     {
@@ -79,11 +84,6 @@ export const searchPlugin: Plugin = {
     examples: '  /search useEffect\n  /search auth\n  /search *.md\n  /search *.ts src',
     workflows: '  1. /search <pattern> opens a search tab\n  2. Focus stays on search tab — type a new query to re-search\n  3. >open 2 to open the second result\n  4. >copy 1 to copy the first result path',
     troubleshooting: '  "No results" — pattern is case-sensitive literal substring for content search.\n  Use *.ext patterns for filename search (e.g. *.md, *.ts).\n  Content search only covers: .ts, .tsx, .js, .jsx, .json, .md, .css, .html.',
-  },
-  async activate(ctx: PluginContext) {
-    for (const cmd of this.commands!) {
-      ctx.commands.register(cmd);
-    }
   },
   async onInput(payload: PluginInputPayload): Promise<PluginInputResult | void> {
     const query = payload.input.trim();

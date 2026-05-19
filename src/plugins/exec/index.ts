@@ -1,7 +1,9 @@
-import type { Plugin, PluginContext } from '../../core/plugin-system/types';
+import type { Plugin } from '../../core/plugin-system/types';
 import { standardActions } from '../../core/actions';
 import runCommand from './run';
 import { ExecView } from './ExecView';
+import { execManifest } from './manifest';
+import { execDefaultSettings, execSettingsSchema } from './settings';
 
 export const execPlugin: Plugin = {
   id: 'exec',
@@ -9,6 +11,9 @@ export const execPlugin: Plugin = {
   version: '0.1.0',
   description: 'Execute shell commands',
   commands: [runCommand],
+  manifest: execManifest,
+  settings: execDefaultSettings,
+  settingsSchema: execSettingsSchema,
   actions: standardActions,
   views: [
     {
@@ -24,10 +29,5 @@ export const execPlugin: Plugin = {
     troubleshooting: '  Commands that need stdin (interactive) will hang — use plain shell commands instead.\n  "command not found" — the shell on the server may not have the command.\n  Use /run for one-off commands; use plain prefix for long-running processes.',
     tips: '  Use ! shorthand for quick commands: !npm test\n  Use /run for commands where you only need the final output.\n  Use no prefix for interactive or long-running commands (they use the PTY terminal).',
     limitations: '  Non-interactive — cannot handle stdin prompts.\n  Uses execSync (blocking) — long commands block the server.\n  Output is all-at-once, not streamed.',
-  },
-  async activate(ctx: PluginContext) {
-    for (const cmd of this.commands!) {
-      ctx.commands.register(cmd);
-    }
   },
 };

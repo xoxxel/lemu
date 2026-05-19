@@ -114,6 +114,27 @@ app.post('/api/fs/delete', async (req, res) => {
   }
 });
 
+// Write file
+app.post('/api/fs/write', async (req, res) => {
+  try {
+    const { path: filePath, content } = req.body;
+    if (!filePath) {
+      return res.json({ success: false, error: 'No path specified' });
+    }
+
+    const target = path.resolve(WORKSPACE, filePath);
+    if (!target.startsWith(WORKSPACE)) {
+      return res.json({ success: false, error: 'Path outside workspace' });
+    }
+
+    await fs.ensureDir(path.dirname(target));
+    await fs.writeFile(target, content, 'utf-8');
+    res.json({ success: true });
+  } catch (err) {
+    res.json({ success: false, error: (err as Error).message });
+  }
+});
+
 // Search file contents (cross-platform — pure Node.js, no grep dependency)
 const SEARCH_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.json', '.md', '.css', '.html']);
 

@@ -1,7 +1,9 @@
-import type { Plugin, PluginContext } from '../../core/plugin-system/types';
+import type { Plugin } from '../../core/plugin-system/types';
 import { standardActions } from '../../core/actions';
 import gitCommand from './git';
 import { GitView } from './GitView';
+import { gitManifest } from './manifest';
+import { gitDefaultSettings, gitSettingsSchema } from './settings';
 
 export const gitPlugin: Plugin = {
   id: 'git',
@@ -9,6 +11,9 @@ export const gitPlugin: Plugin = {
   version: '0.1.0',
   description: 'Run git commands from the terminal',
   commands: [gitCommand],
+  manifest: gitManifest,
+  settings: gitDefaultSettings,
+  settingsSchema: gitSettingsSchema,
   actions: standardActions,
   views: [
     {
@@ -24,10 +29,5 @@ export const gitPlugin: Plugin = {
     troubleshooting: '  "fatal: not a git repository" — the workspace is not a git repo.\n  For interactive git (merge, rebase, credential prompts), use plain git commands without the / prefix.',
     tips: '  Use /git for quick status and commits.\n  Use plain shell commands (no / prefix) for interactive operations like merge, rebase, or when credentials are needed.',
     limitations: '  Non-interactive — cannot handle prompts (merge conflicts, credentials).\n  Uses execSync (blocking on server).\n  Output is all-at-once, not streamed.',
-  },
-  async activate(ctx: PluginContext) {
-    for (const cmd of this.commands!) {
-      ctx.commands.register(cmd);
-    }
   },
 };

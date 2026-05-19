@@ -25,6 +25,34 @@ No lint, typecheck, test, or formatter commands exist. `test/` directory is empt
 
 Only `/terminal` is hardcoded in `App.tsx`. All other `/cmd` routes go through plugins.
 
+## Plugin File Structure
+
+Each plugin should follow the three-layer separation:
+
+```
+plugins/<id>/
+  manifest.ts     → PluginManifest (static, architectural, NEVER user-editable)
+  settings.ts     → Default settings values + PluginSettingsSchema
+  index.ts        → Plugin object with manifest, settings, settingsSchema fields
+  docs.ts         → PluginDocs (optional)
+  <cmd>.ts        → Command implementations
+  <View>.tsx      → React view components
+```
+
+## Three-Layer Separation Rules
+
+| Layer | Type | Editable | Key in Plugin |
+|-------|------|----------|---------------|
+| **Manifest** | `PluginManifest` | No | `manifest` |
+| **Settings** | `PluginSettings` | Yes | `settings` (defaults) |
+| **Settings Schema** | `PluginSettingsSchema` | No | `settingsSchema` |
+| **State** | in-memory only | N/A | via `AppContext` / `PluginContext.state` |
+
+- `manifest` declares capabilities, permissions, services, apis, dependencies, events
+- `settings` contains user-configurable defaults (preferences, tuning, feature toggles)
+- `settingsSchema` describes each setting for validation / UI generation
+- Runtime state must NOT be stored in manifest or settings — use `appContext` or tab state instead
+
 ## Plugins (10 total, auto-discovered via `import.meta.glob`)
 
 | ID | Commands | Views | Notes |

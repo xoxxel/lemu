@@ -13,5 +13,14 @@ export type {
   PluginInputPayload,
   PluginInputResult,
   PluginView,
+  PluginManifest,
+  ManifestPermission,
+  ManifestService,
+  ManifestEvent,
+  ApiEndpoint,
+  ApiService,
+  PluginSettings,
+  PluginSettingsSchema,
+  SettingDefinition,
 } from './types';
 export { PluginRegistry, PluginLoader } from './plugin-loader';

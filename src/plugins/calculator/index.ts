@@ -3,6 +3,8 @@ import type { PluginAction } from '../../core/actions/types';
 import type { Command } from '../../core/commands/types';
 import { eventBus } from '../../core/events';
 import { CalculatorView } from './views/calculatorView';
+import { calculatorManifest } from './manifest';
+import { calculatorDefaultSettings, calculatorSettingsSchema } from './settings';
 
 // ─── Utility: Safe math evaluator ────────────────────────────────────────────
 
@@ -184,6 +186,9 @@ export const calculatorPlugin: Plugin = {
   description: 'Evaluate math expressions with animated visual breakdown',
 
   commands: [calcCommand],
+  manifest: calculatorManifest,
+  settings: calculatorDefaultSettings,
+  settingsSchema: calculatorSettingsSchema,
   actions: [clearAction, copyAction],
 
   views: [

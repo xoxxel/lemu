@@ -1,6 +1,8 @@
 import type { Plugin, PluginContext } from './types';
-import { eventBus, DomainEventTypes } from '../events';
-import type { Intent } from '../pipeline/types';
+import { eventBus } from '../events';
+import { appContext } from '../context';
+import { createApiService } from './api-service';
+import { resolveSettings, saveSettings } from './settings-resolver';
 
 export class PluginRegistry {
   private plugins = new Map<string, Plugin>();
@@ -11,19 +13,14 @@ export class PluginRegistry {
       throw new Error(`Plugin already registered: ${plugin.id}`);
     }
     this.plugins.set(plugin.id, plugin);
-    console.log('[PLUGIN_REGISTRY] Registered plugin: %s (%s)', plugin.id, plugin.name);
   }
 
   activate(id: string): void {
-    console.log('[PLUGIN_REGISTRY] Activating plugin: %s', id);
     this.active.add(id);
-    console.log('[PLUGIN_REGISTRY] Active set size: %d', this.active.size);
   }
 
   deactivate(id: string): void {
-    console.log('[PLUGIN_REGISTRY] Deactivating plugin: %s', id);
     this.active.delete(id);
-    console.log('[PLUGIN_REGISTRY] Active set size: %d', this.active.size);
   }
 
   get(id: string): Plugin | undefined {
@@ -58,29 +55,61 @@ export class PluginLoader {
     private ctx: PluginContext,
   ) {}
 
-  async load(plugin: Plugin, config?: Record<string, unknown>): Promise<void> {
-    console.log('[PLUGIN_LOADER] Loading plugin: %s (%s)', plugin.id, plugin.name);
+  async load(plugin: Plugin, overrides?: Record<string, unknown>): Promise<void> {
     this.registry.register(plugin);
 
-    let resolvedConfig = config ?? {};
-    if (plugin.onConfig) {
-      console.log('[PLUGIN_LOADER] Calling onConfig for %s', plugin.id);
-      resolvedConfig = await plugin.onConfig(resolvedConfig);
-      console.log('[PLUGIN_LOADER] onConfig complete for %s', plugin.id);
+    // ── Process Manifest (static, architectural) ──────────────────────────
+
+    if (plugin.manifest) {
+      appContext.set(`plugin:manifest:${plugin.id}`, plugin.manifest);
+
+      if (plugin.manifest.apis) {
+        const apiService = createApiService(plugin.manifest.apis);
+        (this.ctx as unknown as Record<string, unknown>).api = apiService;
+        appContext.set(`plugin:api:${plugin.id}`, apiService);
+      }
+
+      appContext.set(`plugin:manifest:resolved:${plugin.id}`, plugin.manifest);
     }
+
+    // ── Process Settings (dynamic, user-configurable) ─────────────────────
+
+    const defaults = plugin.settings ?? {};
+
+    let resolvedConfig: Record<string, unknown> = { ...defaults, ...overrides };
+
+    if (plugin.onConfig) {
+      resolvedConfig = await plugin.onConfig(resolvedConfig);
+    }
+
     this.ctx.config = resolvedConfig;
 
+    saveSettings(plugin.id, defaults);
+
+    const fullSettings = resolveSettings(plugin.id, defaults);
+    appContext.set(`plugin:settings:resolved:${plugin.id}`, fullSettings);
+
+    // ── Schemas ───────────────────────────────────────────────────────────
+
+    if (plugin.settingsSchema) {
+      appContext.set(`plugin:settings-schema:${plugin.id}`, plugin.settingsSchema);
+    }
+
+    // ── Inject settings accessor into context ─────────────────────────────
+
+    (this.ctx as unknown as Record<string, unknown>).getSettings = (() => {
+      return resolveSettings(plugin.id, defaults);
+    });
+
+    // ── Register runtime resources ────────────────────────────────────────
+
     if (plugin.commands) {
-      console.log('[PLUGIN_LOADER] Registering %d commands for %s: %j', plugin.commands.length, plugin.id, plugin.commands.map(c => c.name));
       for (const cmd of plugin.commands) {
         this.ctx.commands.register(cmd);
       }
-    } else {
-      console.log('[PLUGIN_LOADER] No commands in plugin.commands for %s', plugin.id);
     }
 
     if (plugin.actions) {
-      console.log('[PLUGIN_LOADER] Registering %d actions for %s', plugin.actions.length, plugin.id);
       for (const action of plugin.actions) {
         const type = action.type || '*';
         this.ctx.actions.register(type, action);
@@ -88,7 +117,6 @@ export class PluginLoader {
     }
 
     if (plugin.views) {
-      console.log('[PLUGIN_LOADER] Registering %d views for %s', plugin.views.length, plugin.id);
       for (const view of plugin.views) {
         this.ctx.views.register(view.type, view.component, view.meta);
       }
@@ -101,15 +129,12 @@ export class PluginLoader {
       (plugin as unknown as Record<string, unknown>).__unsub = unsub;
     }
 
-    console.log('[PLUGIN_LOADER] Calling activate for %s', plugin.id);
-    await plugin.activate(this.ctx);
-    console.log('[PLUGIN_LOADER] activate complete for %s', plugin.id);
+    if (plugin.activate) {
+      await plugin.activate(this.ctx);
+    }
 
-    console.log('[PLUGIN_LOADER] Marking plugin as active in registry: %s', plugin.id);
     this.registry.activate(plugin.id);
-
     this.ctx.events.emit('plugin:activated', { id: plugin.id, name: plugin.name });
-    console.log('[PLUGIN_LOADER] Plugin loaded successfully: %s', plugin.id);
   }
 
   async unload(pluginId: string): Promise<void> {
@@ -117,12 +142,9 @@ export class PluginLoader {
     if (!plugin) throw new Error(`Plugin not found: ${pluginId}`);
 
     if (plugin.onCleanup) {
-      console.log('[PLUGIN_LOADER] Calling onCleanup for %s', pluginId);
       await plugin.onCleanup();
     }
-
     if (plugin.deactivate) {
-      console.log('[PLUGIN_LOADER] Calling deactivate for %s', pluginId);
       await plugin.deactivate(this.ctx);
     }
 
@@ -131,10 +153,8 @@ export class PluginLoader {
   }
 
   async loadAll(plugins: Plugin[]): Promise<void> {
-    console.log('[PLUGIN_LOADER] loadAll() called with %d plugins: %j', plugins.length, plugins.map(p => p.id));
     for (const plugin of plugins) {
       await this.load(plugin);
     }
-    console.log('[PLUGIN_LOADER] loadAll() complete');
   }
 }

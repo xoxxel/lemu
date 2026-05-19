@@ -3,6 +3,72 @@ import type { Command } from '../commands/types';
 import type { PluginAction } from '../actions/types';
 import type { Intent } from '../pipeline/types';
 
+// ─── Manifest (static, architectural, version-controlled) ─────────────────────
+
+export interface ApiEndpoint {
+  path: string;
+  method: 'GET' | 'POST';
+  params?: Record<string, string>;
+}
+
+export interface ManifestPermission {
+  shell?: boolean;
+  network?: boolean;
+  filesystem?: boolean;
+  clipboard?: boolean;
+}
+
+export interface ManifestService {
+  type: 'openai' | 'custom';
+  required: boolean;
+  defaultEndpoint?: string;
+  defaultModel?: string;
+}
+
+export interface ManifestEvent {
+  emits?: string[];
+  subscribes?: string[];
+}
+
+export interface PluginManifest {
+  /** High-level capabilities (e.g. "search", "file-editing", "computation") */
+  capabilities?: string[];
+  /** System resources the plugin needs */
+  permissions?: ManifestPermission;
+  /** Other plugin IDs this depends on */
+  dependencies?: string[];
+  /** External service declarations (architectural, not user-configurable) */
+  services?: Record<string, ManifestService>;
+  /** Internal API endpoints consumed by this plugin */
+  apis?: Record<string, ApiEndpoint>;
+  /** Event integration */
+  events?: ManifestEvent;
+}
+
+// ─── Settings (user-configurable, dynamic) ────────────────────────────────────
+
+/** Describes one configurable setting's metadata */
+export interface SettingDefinition {
+  type: 'string' | 'number' | 'boolean' | 'select' | 'multiline';
+  label: string;
+  description?: string;
+  placeholder?: string;
+  options?: string[];
+}
+
+/** Schema that describes the shape of user-configurable settings */
+export type PluginSettingsSchema = Record<string, SettingDefinition>;
+
+/** Actual user-configurable values (defaults + overrides) */
+export type PluginSettings = Record<string, unknown>;
+
+// ─── Runtime services ─────────────────────────────────────────────────────────
+
+export interface ApiService {
+  call(name: string, params?: Record<string, string>, body?: unknown): Promise<unknown>;
+  getUrl(name: string): string;
+}
+
 export interface CommandExecutedPayload {
   command: string;
   args: string[];
@@ -51,7 +117,7 @@ export interface Plugin {
   name: string;
   version: string;
   description?: string;
-  activate(ctx: PluginContext): Promise<void>;
+  activate?(ctx: PluginContext): Promise<void>;
   deactivate?(ctx: PluginContext): Promise<void>;
   commands?: Command[];
   actions?: PluginAction[];
@@ -66,6 +132,12 @@ export interface Plugin {
   docs?: PluginDocs;
   onEvent?(event: string, payload?: unknown): Promise<void>;
   onIntent?(intent: Intent): Promise<Intent | null>;
+  /** Static architectural declaration — NEVER user-editable */
+  manifest?: PluginManifest;
+  /** Default user-configurable values */
+  settings?: PluginSettings;
+  /** Schema describing the settings shape (for validation/UI generation) */
+  settingsSchema?: PluginSettingsSchema;
 }
 
 export interface ShellService {
@@ -123,6 +195,8 @@ export interface PluginContext {
   ui: UIService;
   config: Record<string, unknown>;
   context: AppContextService;
+  /** Returns resolved settings for the current plugin (defaults + user overrides) */
+  getSettings<T = PluginSettings>(): T;
   actions: {
     register(type: string, action: import('../actions/types').PluginAction): void;
   };
@@ -135,4 +209,5 @@ export interface PluginContext {
   views: {
     register(type: string, component: ComponentType<{ state: Record<string, unknown> }>, meta: { label: string; icon: string }): void;
   };
+  api: ApiService;
 }
