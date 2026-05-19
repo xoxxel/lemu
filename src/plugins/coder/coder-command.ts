@@ -88,7 +88,8 @@ const coderCommand: Command = {
         workspaceContext = await api.getWorkspaceTree();
       } catch {}
 
-      const systemMsg = fileContent
+      const isEditMode = filePath !== null;
+      const systemMsg = isEditMode
         ? [
           `You are a code editor assistant. The user wants to modify a file.`,
           ``,
@@ -96,7 +97,7 @@ const coderCommand: Command = {
           ``,
           `Current content:`,
           `\`\`\``,
-          fileContent,
+          fileContent || '(empty file)',
           `\`\`\``,
           ``,
           `Request: ${prompt}`,

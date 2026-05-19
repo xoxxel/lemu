@@ -19,6 +19,9 @@ import type { ModelRegistry } from '../ai/model-registry';
 import type { ProviderConfig } from '../ai/types';
 import type { SettingsScope } from '../settings/types';
 import { registerRuntimeSettings, settingsRegistry } from '../settings';
+import { grammarRegistry, suggestionEngine } from '../grammar';
+import type { GrammarContext, GrammarSuggestion } from '../grammar';
+import { registry as cmdRegistry } from '../commands/registry';
 
 const appWrappers: unknown[] = [];
 
@@ -155,6 +158,14 @@ export interface Runtime {
   getEditPipeline(): typeof editPipeline;
   getAIProviderRegistry(): ProviderRegistry;
   getAIModelRegistry(): ModelRegistry;
+  grammar: {
+    suggest(input: string, context: GrammarContext): GrammarSuggestion[];
+    execute(input: string, context: GrammarContext, deps: {
+      addTab: (type: string, title: string, state?: Record<string, unknown>) => string;
+      pin: () => void;
+      unpin: () => void;
+    }): Promise<import('../grammar/types').ExecuteResult>;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -277,6 +288,53 @@ function handleSetDefaultProvider(targetId: string): string {
 function handleReloadProviders(): string {
   applyAISettingsFromRegistry();
   return 'AI provider settings re-applied from registry.';
+}
+
+// ---------------------------------------------------------------------------
+// Grammar registration
+// ---------------------------------------------------------------------------
+
+function registerAllWithGrammar(actRegistry: ActionRegistry): void {
+  // Register all commands from command registry
+  for (const cmd of cmdRegistry.getAll()) {
+    grammarRegistry.register({
+      id: cmd.name,
+      namespace: 'global',
+      title: cmd.description || cmd.name,
+      description: cmd.description,
+      usage: cmd.usage,
+      examples: cmd.examples?.map(e => e.input),
+      execute: async (ctx) => {
+        const parsed = { name: cmd.name, args: (ctx.node as import('../grammar/types').CommandNode).args, raw: ctx.node.raw };
+        const result = await executor.execute(parsed);
+        return result.message;
+      },
+    });
+  }
+
+  // Register global actions from actionRegistry
+  const globalActions = actRegistry.getForType('*');
+  for (const act of globalActions) {
+    grammarRegistry.register({
+      id: act.id,
+      namespace: 'runtime',
+      title: act.title || act.id,
+      description: act.description,
+      execute: async (ctx) => {
+        const actionCtx = {
+          tabId: ctx.context.activeTabId,
+          tabType: ctx.context.activeTabType,
+          tabState: {},
+          query: (ctx.node as import('../grammar/types').ActionNode).query,
+          pinned: ctx.context.pinned,
+          pin: ctx.pin,
+          unpin: ctx.unpin,
+          addTab: ctx.addTab,
+        };
+        return act.handler(actionCtx);
+      },
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -488,6 +546,15 @@ export async function createRuntime(): Promise<Runtime> {
     getAIProviderRegistry: () => providerRegistry,
     getAIModelRegistry: () => modelRegistry,
 
+    grammar: {
+      suggest(input: string, context: GrammarContext) {
+        return suggestionEngine.suggest(input, context);
+      },
+      async execute(input: string, context: GrammarContext, deps) {
+        return grammarRegistry.execute(input, context, deps);
+      },
+    },
+
     async init(plugins) {
       registerRuntimeSettings();
       registerDefaultProviders();
@@ -496,6 +563,8 @@ export async function createRuntime(): Promise<Runtime> {
       await orchestrator.init();
       await pluginLoader.loadAll(plugins);
       console.log('[RUNTIME] All plugins loaded. Registry has %d commands', registry.getAll().length);
+
+      registerAllWithGrammar(actionRegistry);
 
       const renderCtx: AppRenderContext = {
         registerWrapper(wrapper: unknown) {

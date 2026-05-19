@@ -3,7 +3,11 @@ import { parse } from './core/parser';
 import { classifyInput } from './core/input-router';
 import { getRuntime } from './core/runtime/instance';
 import type { PluginInputResult } from './core/plugin-system/types';
+import type { ParsedCommand } from './core/commands/types';
 import { registry } from './core/commands/registry';
+import { parser as grammarParser } from './core/grammar/parser';
+import { nodeToLegacyPayload, commandNodeToParsedCommand } from './core/grammar/adapter';
+import type { AstNode, CommandNode, ActionNode, HelpNode, TerminalNode, SequenceNode, PipeNode } from './core/grammar/types';
 import { useCommandHistory } from './hooks/useCommandHistory';
 import { useAutocomplete } from './hooks/useAutocomplete';
 import { useTerminal } from './hooks/useTerminal';
@@ -21,6 +25,56 @@ import TerminalTabBar from './components/TerminalTabBar';
 import TerminalOutput from './components/TerminalOutput';
 import MainTabBar from './components/MainTabBar';
 import './styles/app.css';
+
+function isActionNode(n: AstNode | null): n is ActionNode { return n?.type === 'action'; }
+function isCommandNode(n: AstNode | null): n is CommandNode { return n?.type === 'command'; }
+function isHelpNode(n: AstNode | null): n is HelpNode { return n?.type === 'help'; }
+function isTerminalNode(n: AstNode | null): n is TerminalNode { return n?.type === 'terminal'; }
+
+interface GrammarClassified {
+  mode: 'command' | 'action' | 'help' | 'terminal' | 'tab';
+  input: string;
+  raw: string;
+  global?: boolean;
+  node: AstNode | null;
+}
+
+function grammarClassify(raw: string): GrammarClassified {
+  const trimmed = raw.trim();
+  if (!trimmed) return { mode: 'tab', input: '', raw, node: null };
+
+  // Handle ! prefix (legacy exec command) — grammar parser doesn't tokenize ! as prefix
+  if (trimmed.startsWith('!')) {
+    return { mode: 'command', input: trimmed, raw, node: null };
+  }
+
+  const result = grammarParser.parse(trimmed);
+  const node = result.node;
+
+  if (isActionNode(node)) {
+    return { mode: 'action', input: node.query, raw, global: node.global, node };
+  }
+
+  if (isCommandNode(node)) {
+    return { mode: 'command', input: node.raw, raw, node };
+  }
+
+  if (isHelpNode(node)) {
+    return { mode: 'help', input: node.topic, raw, node };
+  }
+
+  if (isTerminalNode(node)) {
+    return { mode: 'terminal', input: node.command, raw, node };
+  }
+
+  // Sequence/Pipe — use adapter
+  if (node && (node.type === 'sequence' || node.type === 'pipe')) {
+    return { mode: 'command', input: node.raw, raw, node };
+  }
+
+  // Literal (plain text) → tab
+  return { mode: 'tab', input: trimmed, raw, node };
+}
 
 function applyAutocomplete(input: string, selected: string): string {
   const trimmed = input.trim();
@@ -227,9 +281,9 @@ export default function App() {
   }, [addMessage, addTab]);
 
   const handleSubmit = useCallback(async (input: string) => {
-    const classified = classifyInput(input);
-    const { mode, input: routedInput, raw } = classified;
-    if (!routedInput && mode !== 'tab') return;
+    const classified = grammarClassify(input);
+    const { mode, input: routedInput, raw, node } = classified;
+    if (!routedInput && mode !== 'tab' && !node) return;
 
     addHistory(raw);
     setInputValue('');
@@ -354,9 +408,17 @@ export default function App() {
     }
 
     if (mode === 'command') {
-      const parsed = parse(routedInput);
       addMessage('user', raw);
-      if (!parsed) {
+
+      let parsed: ParsedCommand | null = null;
+
+      if (node && (node.type === 'command' || node.type === 'sequence' || node.type === 'pipe')) {
+        parsed = commandNodeToParsedCommand(node);
+      } else {
+        parsed = parse(routedInput);
+      }
+
+      if (!parsed || !parsed.name) {
         addMessage('error', 'Invalid command syntax.');
         return;
       }
