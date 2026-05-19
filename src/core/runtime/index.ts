@@ -13,6 +13,9 @@ import { intentPipeline } from '../pipeline';
 import type { Intent } from '../pipeline/types';
 import { orchestrator } from '../orchestrator/orchestrator';
 import { editPipeline } from '../orchestrator';
+import { providerRegistry, modelRegistry, registerDefaultProviders } from '../ai';
+import type { ProviderRegistry } from '../ai/provider-registry';
+import type { ModelRegistry } from '../ai/model-registry';
 
 const appWrappers: unknown[] = [];
 
@@ -147,6 +150,8 @@ export interface Runtime {
   getContext(): typeof appContext;
   getPipeline(): typeof intentPipeline;
   getEditPipeline(): typeof editPipeline;
+  getAIProviderRegistry(): ProviderRegistry;
+  getAIModelRegistry(): ModelRegistry;
 }
 
 export async function createRuntime(): Promise<Runtime> {
@@ -290,8 +295,11 @@ export async function createRuntime(): Promise<Runtime> {
     getContext: () => appContext,
     getPipeline: () => intentPipeline,
     getEditPipeline: () => editPipeline,
+    getAIProviderRegistry: () => providerRegistry,
+    getAIModelRegistry: () => modelRegistry,
 
     async init(plugins) {
+      registerDefaultProviders();
       console.log('[RUNTIME] init() called with %d plugins', plugins.length);
       await orchestrator.init();
       await pluginLoader.loadAll(plugins);

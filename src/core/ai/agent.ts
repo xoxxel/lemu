@@ -1,11 +1,10 @@
-import type { AIProvider, AIMessage, MCPTool, AIResult } from './types';
-import { createProvider } from './provider';
+import type { AIMessage, MCPTool, AIResult, AIProvider } from './types';
+import { providerRegistry } from './provider-registry';
 import { defineTools } from './mcp-tools';
 import { buildContextMessages, buildSystemPrompt } from './context';
 
 const MAX_ITERATIONS = 25;
 
-let provider: AIProvider | null = null;
 let toolCache: MCPTool[] | null = null;
 
 function getTools(): MCPTool[] {
@@ -17,24 +16,19 @@ function getToolByName(name: string): MCPTool | undefined {
   return getTools().find((t) => t.name === name);
 }
 
-export async function ensureProvider(config?: Record<string, string>): Promise<AIProvider> {
-  if (!provider) {
-    provider = await createProvider(
-      config?.apiKey ? { apiKey: config.apiKey } : undefined
-    );
-  }
-  return provider;
-}
-
-export function resetProvider(): void {
-  provider = null;
+export function ensureProvider(id?: string): AIProvider | undefined {
+  if (id) return providerRegistry.get(id);
+  return providerRegistry.getDefaultProvider();
 }
 
 export async function askAI(input: string): Promise<AIResult> {
   try {
-    const p = await ensureProvider();
+    const p = ensureProvider();
+    if (!p) {
+      return { success: false, message: 'No AI provider configured.' };
+    }
     const messages = buildContextMessages(input);
-    const response = await p.chat(messages, getTools());
+    const response = await p.chat(messages, { tools: getTools() });
     return {
       success: true,
       message: response.content || '(no response)',
@@ -50,7 +44,11 @@ export async function askAI(input: string): Promise<AIResult> {
 
 export async function runAgent(task: string): Promise<AIResult> {
   try {
-    const p = await ensureProvider();
+    const p = ensureProvider();
+    if (!p) {
+      return { success: false, message: 'No AI provider configured.' };
+    }
+
     const tools = getTools();
     const toolMap = new Map(tools.map((t) => [t.name, t]));
 
@@ -67,7 +65,7 @@ export async function runAgent(task: string): Promise<AIResult> {
     const logs: string[] = [];
 
     for (let i = 0; i < MAX_ITERATIONS; i++) {
-      const response = await p.chat(messages, tools);
+      const response = await p.chat(messages, { tools });
 
       if (response.tool_calls && response.tool_calls.length > 0) {
         messages.push(response);
@@ -124,10 +122,25 @@ export async function runAgent(task: string): Promise<AIResult> {
 
 export async function configureAI(config: Record<string, string>): Promise<AIResult> {
   const apiKey = config.apiKey || config.key;
+  const providerId = config.provider || 'openai';
+
   if (apiKey) {
-    resetProvider();
-    provider = await createProvider({ apiKey });
-    return { success: true, message: 'AI provider configured.' };
+    const { createOpenAIProvider } = await import('./providers/openai');
+    const def = providerRegistry.getDefinition(providerId);
+    providerRegistry.register(providerId, createOpenAIProvider({
+      apiKey,
+      endpoint: def?.endpoint,
+      model: def?.defaultModel,
+    }), def);
+    return { success: true, message: `AI provider '${providerId}' configured.` };
   }
   return { success: false, message: 'Provide an API key: /ai config apiKey=sk-...' };
+}
+
+export function resetProvider(id?: string): void {
+  if (id) {
+    providerRegistry.remove(id);
+  } else {
+    providerRegistry.clear();
+  }
 }
