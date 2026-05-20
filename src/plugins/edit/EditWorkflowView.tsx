@@ -48,7 +48,6 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
   const [statusMsg, setStatusMsg] = useState('');
   const [activeRange, setActiveRange] = useState<ActiveRange | null>(null);
   const [editBuffer, setEditBuffer] = useState('');
-  const [cmdInput, setCmdInput] = useState('');
   const codeScrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -96,54 +95,6 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
   }, [focusSeq]);
 
   /* ── command input ────────────────────────────── */
-
-  const handleCmdSubmit = useCallback(() => {
-    const trimmed = cmdInput.trim();
-    setCmdInput('');
-
-    if (!trimmed) return;
-
-    if (activeRange && (trimmed === '<<' || trimmed === '>>')) {
-      if (trimmed === '<<') {
-        if (editBuffer !== getRangeContent(currentContent, activeRange)) {
-          const newContent = replaceRange(currentContent, activeRange, editBuffer);
-          setCurrentContent(newContent);
-          setStatus('idle');
-          setStatusMsg('Edit committed.');
-        } else {
-          setStatusMsg('No changes to commit.');
-        }
-      }
-      setActiveRange(null);
-      setEditBuffer('');
-      return;
-    }
-
-    const range = parseRange(trimmed);
-    if (range) {
-      const clamped = clampRange(range, lines.length);
-      setActiveRange(clamped);
-      const rangeContent = getRangeContent(currentContent, clamped);
-      setEditBuffer(rangeContent);
-      setStatusMsg(`Editing lines ${clamped.start}-${clamped.end}`);
-      scrollToLine(clamped.start);
-      return;
-    }
-
-    setStatusMsg(`Unknown: "${trimmed}"`);
-  }, [cmdInput, currentContent, activeRange, editBuffer, lines.length, scrollToLine]);
-
-  const handleCmdKey = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleCmdSubmit();
-      return;
-    }
-    if (e.key === 'Escape' && activeRange) {
-      setActiveRange(null);
-      setEditBuffer('');
-      setStatusMsg('Cancelled.');
-    }
-  }, [handleCmdSubmit, activeRange]);
 
   /* ── textarea edit handler ────────────────────── */
 
@@ -373,44 +324,16 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
         )}
       </div>
 
-      {/* ── command input bar ────────────────────── */}
       <div style={{
         borderTop: '0.5px solid var(--border)',
-        display: 'flex',
-        alignItems: 'center',
+        padding: '10px 16px',
+        color: 'var(--text-muted)',
+        fontFamily: 'var(--font-mono)',
+        fontSize: 12,
         background: 'var(--bg-secondary)',
         flexShrink: 0,
       }}>
-        <span style={{
-          padding: '0 0 0 12px',
-          color: 'var(--text-muted)',
-          fontFamily: 'var(--font-mono)',
-          fontSize: 13,
-        }}>
-          {'>'}
-        </span>
-        <input
-          type="text"
-          value={cmdInput}
-          onChange={e => setCmdInput(e.target.value)}
-          onKeyDown={handleCmdKey}
-          placeholder={
-            activeRange
-              ? '<< to commit · >> or Esc to cancel'
-              : '10 to focus line · 10 15 to focus range'
-          }
-          style={{
-            flex: 1,
-            border: 'none',
-            outline: 'none',
-            padding: '10px 12px',
-            background: 'transparent',
-            color: 'var(--text-primary)',
-            fontFamily: 'var(--font-mono)',
-            fontSize: 13,
-          }}
-          spellCheck={false}
-        />
+        Use the main input bar to control this view: type <code>{'>10'}</code> or <code>{'>10 15'}</code> to focus a line or range, and use <code>{'>propose'}</code> / <code>{'>apply'}</code> / <code>{'>reject'}</code>.
       </div>
     </div>
   );
