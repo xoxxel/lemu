@@ -106,6 +106,38 @@ export interface PluginDocs {
   limitations?: string;
 }
 
+export interface PluginPlaceholders {
+  /** Shown when plugin tab is active and user has not typed > */
+  defaultPlaceholder?: string;
+  /** Shown when user types > (action/primary input mode) */
+  primaryPlaceholder?: string;
+}
+
+export interface PrimaryInputConfig {
+  enabled: boolean;
+  grammar?: string;
+  examples?: string[];
+}
+
+export interface PluginInteraction {
+  primaryInput?: PrimaryInputConfig;
+  placeholders?: PluginPlaceholders;
+}
+
+/**
+ * Strict contextual namespaces for the input bar.
+ * Each prefix maps to exactly one scope — no mixing, no fallback merging.
+ *
+ * `/`  → command    (command mode)
+ * `@`  → help       (quick help / discovery)
+ * `:`  → terminal   (terminal mode)
+ * `>`  → action     (focused-plugin action space — NEVER global)
+ * `*>` → global-action (global/system action space — NEVER plugin)
+ * none + plugin → primary (plugin-defined structured input, NOT an action)
+ * none + no plugin → idle
+ */
+export type CommandScope = 'idle' | 'command' | 'help' | 'terminal' | 'action' | 'global-action' | 'primary';
+
 export interface PluginView {
   type: string;
   component: ComponentType<{ state: Record<string, unknown> }>;
@@ -138,6 +170,8 @@ export interface Plugin {
   settings?: PluginSettings;
   /** Schema describing the settings shape (for validation/UI generation) */
   settingsSchema?: PluginSettingsSchema;
+  /** Focused interaction mode metadata */
+  interaction?: PluginInteraction;
 }
 
 export interface ShellService {

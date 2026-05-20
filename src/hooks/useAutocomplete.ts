@@ -7,8 +7,10 @@ import type { AutocompleteItem } from '../core/commands/types';
 import type { GrammarContext, GrammarSuggestion } from '../core/grammar/types';
 import { suggestionEngine } from '../core/grammar/suggest';
 import { scopeResolver } from '../core/grammar/scope';
+import type { CommandScope } from '../core/plugin-system/types';
+import { resolveScope, getScopeActions } from '../core/scope/scope-resolver';
 
-export function useAutocomplete(activeTabType: string | null) {
+export function useAutocomplete(scope: CommandScope, activePlugin: { id: string; views?: Array<{ type: string }> } | null) {
   const [suggestions, setSuggestions] = useState<AutocompleteItem[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [statusText, setStatusText] = useState<string | null>(null);
@@ -16,9 +18,67 @@ export function useAutocomplete(activeTabType: string | null) {
   const update = useCallback(async (input: string) => {
     const runtime = getRuntime();
 
+    /* ── Action scope: ONLY plugin actions, by prefix, no mixing ── */
+    if (input.startsWith('*>')) {
+      const query = input.replace(/^\*>/, '').trim();
+      const acts = runtime.actionRegistry.getGlobal().filter(a => {
+        if (!query) return true;
+        const q = query.toLowerCase();
+        return a.id.toLowerCase().includes(q) || a.title?.toLowerCase().includes(q);
+      });
+      const seen = new Set<string>();
+      setSuggestions(acts.filter(a => {
+        if (seen.has(a.id)) return false;
+        seen.add(a.id);
+        return true;
+      }).map(a => ({
+        value: '*>' + a.id,
+        description: a.title || a.description || '',
+        type: 'action' as const,
+      })));
+      setSelectedIndex(0);
+      setStatusText(null);
+      return;
+    }
+
+    if (input.startsWith('>')) {
+      const query = input.replace(/^>/, '').trim();
+      /* No active plugin → instruct, never show actions */
+      if (!activePlugin) {
+        setSuggestions([{
+          value: '',
+          description: 'Open a plugin tab first (e.g. /edit file.ts)',
+          type: 'help',
+        }]);
+        setSelectedIndex(0);
+        setStatusText(null);
+        return;
+      }
+      const tabType = activePlugin.views?.[0]?.type;
+      if (!tabType) { setSuggestions([]); setStatusText(null); return; }
+      const acts = runtime.actionRegistry.getScoped(tabType).filter(a => {
+        if (!query) return true;
+        const q = query.toLowerCase();
+        return a.id.toLowerCase().includes(q) || a.title?.toLowerCase().includes(q);
+      });
+      const seen = new Set<string>();
+      setSuggestions(acts.filter(a => {
+        if (seen.has(a.id)) return false;
+        seen.add(a.id);
+        return true;
+      }).map(a => ({
+        value: '>' + a.id,
+        description: a.title || a.description || '',
+        type: 'action' as const,
+      })));
+      setSelectedIndex(0);
+      setStatusText(null);
+      return;
+    }
+
     // Use grammar suggestion engine as primary path
     const ctx: GrammarContext = {
-      activeTabType,
+      activeTabType: activePlugin?.views?.[0]?.type ?? null,
       activeTabId: null,
       pinned: false,
       query: input,
@@ -39,7 +99,7 @@ export function useAutocomplete(activeTabType: string | null) {
     }
 
     // Fallback: old autocomplete paths for non-prefixed input
-    if (!input.startsWith('/') && !input.startsWith('>') && !input.startsWith('*>') && !input.startsWith('@') && !input.startsWith(':')) {
+    if (!input.startsWith('/') && !input.startsWith('@') && !input.startsWith(':')) {
       setSuggestions([]);
       setStatusText(null);
       return;
@@ -75,7 +135,7 @@ export function useAutocomplete(activeTabType: string | null) {
 
     setSuggestions([]);
     setStatusText(null);
-  }, [activeTabType]);
+  }, [activePlugin]);
 
   const clear = useCallback(() => {
     setSuggestions([]);

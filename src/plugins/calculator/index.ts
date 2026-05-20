@@ -190,6 +190,16 @@ export const calculatorPlugin: Plugin = {
   settings: calculatorDefaultSettings,
   settingsSchema: calculatorSettingsSchema,
   actions: [clearAction, copyAction],
+  interaction: {
+    primaryInput: {
+      enabled: true,
+      examples: ['2 + 2', 'sqrt(144)', 'sin(π/2)'],
+    },
+    placeholders: {
+      defaultPlaceholder: 'send 2+2 and see result',
+      primaryPlaceholder: 'enter expression (e.g. 2 + 2)',
+    },
+  },
 
   views: [
     {

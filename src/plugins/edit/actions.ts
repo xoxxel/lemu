@@ -5,6 +5,41 @@ function getPendingKey(tabId: string): string {
   return `edit:pending:${tabId}`;
 }
 
+export const pendingFocus = { value: null as { start: number; end: number } | null, seq: 0 };
+
+function parseRange(input: string): { start: number; end: number } | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  const single = trimmed.match(/^(\d+)$/);
+  if (single) {
+    const n = parseInt(single[1], 10);
+    return { start: n, end: n };
+  }
+  const pair = trimmed.match(/^(\d+)\s+(\d+)$/);
+  if (pair) {
+    const s = parseInt(pair[1], 10);
+    const e = parseInt(pair[2], 10);
+    return { start: Math.min(s, e), end: Math.max(s, e) };
+  }
+  return null;
+}
+
+export const focusAction: PluginAction = {
+  id: 'focus',
+  type: 'edit-workflow',
+  title: 'Focus line/range',
+  description: 'Focus a line or range (e.g. >10 or >10 15)',
+  handler: async (ctx) => {
+    const range = parseRange(ctx.query);
+    if (!range) return `Could not parse range: "${ctx.query}". Usage: >10 or >10 15`;
+    const tabState = ctx.tabState as Record<string, unknown>;
+    tabState.focusedRange = { start: range.start, end: range.end };
+    pendingFocus.value = range;
+    pendingFocus.seq++;
+    return `Focused lines ${range.start}-${range.end}`;
+  },
+};
+
 export const proposeAction: PluginAction = {
   id: 'propose',
   type: 'edit-workflow',
@@ -123,6 +158,7 @@ export const showDiffAction: PluginAction = {
 };
 
 export const editWorkflowActions: PluginAction[] = [
+  focusAction,
   proposeAction,
   applyAction,
   rejectAction,

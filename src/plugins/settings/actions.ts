@@ -151,7 +151,7 @@ export const settingsScopeAction: PluginAction = {
   type: 'settings',
   title: 'Change scope',
   description: 'Switch settings scope: system | workspace | session',
-  aliases: ['sc'],
+  aliases: ['sc', 'scopeaction'],
   handler: async (ctx) => {
     const parts = ctx.query.split(/\s+/);
     const scope = parts[1] as SettingsScope;

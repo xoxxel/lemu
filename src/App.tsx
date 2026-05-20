@@ -2,7 +2,8 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { parse } from './core/parser';
 import { classifyInput } from './core/input-router';
 import { getRuntime } from './core/runtime/instance';
-import type { PluginInputResult } from './core/plugin-system/types';
+import type { PluginInputResult, CommandScope } from './core/plugin-system/types';
+import { resolveScope, getScopePlaceholder } from './core/scope/scope-resolver';
 import type { ParsedCommand } from './core/commands/types';
 import { registry } from './core/commands/registry';
 import { parser as grammarParser } from './core/grammar/parser';
@@ -126,7 +127,9 @@ export default function App() {
   const { add: addHistory, up: historyUp, down: historyDown, reset: resetHistory, isNavigating } = useCommandHistory();
   const activeTab = tabs.find((t) => t.id === activeTabId) || null;
   const activeTabType = tabs.find((t) => t.id === activeTabId)?.type ?? null;
-  const { suggestions, selectedIndex, statusText, update: updateAutocomplete, clear: clearAutocomplete, selectNext, selectPrev, selectCurrent } = useAutocomplete(activeTabType);
+  const activePlugin = activeTabType ? getRuntime().pluginRegistry.getPluginByTabType(activeTabType) : null;
+  const { scope: activeScope } = resolveScope(inputValue, activePlugin);
+  const { suggestions, selectedIndex, statusText, update: updateAutocomplete, clear: clearAutocomplete, selectNext, selectPrev, selectCurrent } = useAutocomplete(activeScope, activePlugin);
   const terminal = useTerminal();
 
   const addMessage = useCallback((type: Message['type'], content: string) => {
@@ -293,67 +296,105 @@ export default function App() {
       const isGlobal = classified.global === true;
       const runtime = getRuntime();
 
+      /* ── Empty query: list actions for current scope only ── */
       if (!routedInput) {
         addMessage('user', raw);
-        const globalActions = runtime.actionRegistry.getForType('*');
-        if (isGlobal || !activeTab) {
-          const body = globalActions.length > 0
-            ? globalActions.map(a => `  *>${a.id}  ${a.title ?? ''}`).join('\n')
+        if (isGlobal) {
+          const actions = runtime.actionRegistry.getGlobal();
+          const body = actions.length > 0
+            ? actions.map(a => `  *>${a.id}  ${a.title ?? ''}`).join('\n')
             : '  No global actions available.';
           addMessage('system', `Global actions:\n${body}`);
-        } else {
-          const tabActions = runtime.actionRegistry.getForType(activeTab.type);
-          const body = tabActions.length > 0
-            ? tabActions.map(a => `  >${a.id}  ${a.title ?? ''}`).join('\n')
+        } else if (activeTab) {
+          const actions = runtime.actionRegistry.getScoped(activeTab.type);
+          const body = actions.length > 0
+            ? actions.map(a => `  >${a.id}  ${a.title ?? ''}`).join('\n')
             : `  No actions for ${activeTab.type}`;
           addMessage('system', `Actions for ${activeTab.type}:\n${body}`);
-          if (globalActions.length > 0) {
-            addMessage('system', `Global actions (use *>):\n${globalActions.map(a => `  *>${a.id}  ${a.title ?? ''}`).join('\n')}`);
-          }
+        } else {
+          addMessage('system', 'Open a plugin tab first (e.g. /edit file.ts), then use > for its actions.');
         }
         return;
       }
 
       let action: import('./core/actions/types').PluginAction | undefined;
 
+      /* ── *> scope: ONLY global actions, NEVER plugin ── */
       if (isGlobal) {
-        action = runtime.actionRegistry.findByTypeAndId('*', routedInput);
+        action = runtime.actionRegistry.findGlobal(routedInput);
         if (!action) {
-          const globalActions = runtime.actionRegistry.getForType('*');
+          const globalActions = runtime.actionRegistry.getGlobal();
           const prefix = routedInput.split(' ')[0];
           action = globalActions.find(a =>
             a.aliases?.some(al => al.toLowerCase() === routedInput.toLowerCase())
           ) || globalActions.find(a => a.id === prefix);
+          /* still restrict to global only — never touch scoped */
+          if (action && !globalActions.includes(action)) action = undefined;
         }
-      } else {
-        action = runtime.actionRegistry.findByTypeAndId('*', routedInput);
+      }
+      /* ── > scope: ONLY plugin actions, NEVER global ── */
+      else if (activeTab) {
+        action = runtime.actionRegistry.findScoped(activeTab.type, routedInput);
         if (!action) {
-          const globalActions = runtime.actionRegistry.getForType('*');
-          const prefix = routedInput.split(' ')[0];
-          action = globalActions.find(a =>
+          const allActions = runtime.actionRegistry.getScoped(activeTab.type);
+          action = allActions.find(a =>
             a.aliases?.some(al => al.toLowerCase() === routedInput.toLowerCase())
-          ) || globalActions.find(a => a.id === prefix);
+          );
         }
-        if (!action && activeTab) {
-          action = runtime.actionRegistry.findByTypeAndId(activeTab.type, routedInput);
-          if (!action) {
-            const allActions = runtime.actionRegistry.getForType(activeTab.type);
-            action = allActions.find(a =>
-              a.aliases?.some(al => al.toLowerCase() === routedInput.toLowerCase())
-            );
+        if (!action) {
+          const allActions = runtime.actionRegistry.getScoped(activeTab.type);
+          const prefix = routedInput.split(' ')[0];
+          action = allActions.find(a => a.id === prefix);
+        }
+      }
+      /* ── > with no active tab: instruct, never show global ── */
+      else {
+        addMessage('user', raw);
+        addMessage('error', 'No plugin tab active. Open a file first (e.g. /edit file.ts), then use > for its actions.');
+        return;
+      }
+
+      /* ── Primary input channel (plugin-defined structured input, not an action) ── */
+      if (!action && activeTab) {
+        const activePlugin = runtime.pluginRegistry.getPluginByTabType(activeTab.type);
+        if (activePlugin?.interaction?.primaryInput?.enabled) {
+          addMessage('user', raw);
+          if (activePlugin.onInput) {
+            const result = await runtime.processPluginInput({
+              input: routedInput,
+              tabId: activeTab.id,
+              tabType: activeTab.type,
+              state: activeTab.state ?? {},
+            });
+            if (result) {
+              if (result.message) addMessage('system', result.message);
+              if (result.state) {
+                setTabs(prev => prev.map(t =>
+                  t.id === activeTab.id ? { ...t, state: { ...t.state, ...result.state } } : t
+                ));
+              }
+              if (result.openTab) {
+                const ot = result.openTab;
+                const viewMeta = runtime.viewMetaMap;
+                const meta = viewMeta[ot.type];
+                addTab(ot.type, ot.title ?? meta?.label ?? ot.type, undefined, ot.state);
+              }
+              return;
+            }
           }
-          if (!action) {
-            const allActions = runtime.actionRegistry.getForType(activeTab.type);
-            const prefix = routedInput.split(' ')[0];
-            action = allActions.find(a => a.id === prefix);
+          /* fallback: use the focus action as default primary input handler */
+          const focus = runtime.actionRegistry.findScoped(activeTab.type, 'focus');
+          if (focus) {
+            action = focus;
           }
         }
       }
 
       if (!action) {
         addMessage('user', raw);
-        const hint = isGlobal ? 'Type *> to list global actions.'
-          : `Type > to list actions for ${activeTab?.type ?? 'this tab'} or *> for global actions.`;
+        const hint = isGlobal
+          ? 'Type *> to list global actions.'
+          : `Type > to list actions for ${activeTab?.type ?? 'this tab'}.`;
         addMessage('error', `No action '${routedInput}'. ${hint}`);
         runtime.feedback.show({
           level: 'error',
@@ -636,6 +677,7 @@ export default function App() {
           selectedIndex={selectedIndex}
           hint={statusText}
           mode={inputMode}
+          customPlaceholder={getScopePlaceholder(activeScope, activePlugin)}
           onSuggestionClick={(idx) => {
             const selected = suggestions[idx];
             if (selected) {

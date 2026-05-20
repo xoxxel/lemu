@@ -22,4 +22,11 @@ export const editPlugin: Plugin = {
   manifest: editManifest,
   settings: editDefaultSettings,
   settingsSchema: editSettingsSchema,
+  interaction: {
+    primaryInput: {
+      enabled: true,
+      grammar: '<start> [end]',
+      examples: ['10', '10 20'],
+    },
+  },
 };

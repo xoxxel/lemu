@@ -12,6 +12,7 @@ interface InputBarProps {
   onSuggestionClick: (index: number) => void;
   hint?: string | null;
   mode?: InputMode;
+  customPlaceholder?: string;
 }
 
 const INDICATOR: Record<InputMode, string> = {
@@ -21,7 +22,7 @@ const INDICATOR: Record<InputMode, string> = {
 };
 
 const InputBar = forwardRef<HTMLInputElement, InputBarProps>(
-  ({ value, onChange, onKeyDown, suggestions, selectedIndex, onSuggestionClick, hint, mode = 'normal' }, ref) => {
+  ({ value, onChange, onKeyDown, suggestions, selectedIndex, onSuggestionClick, hint, mode = 'normal', customPlaceholder }, ref) => {
     const menuRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -70,7 +71,7 @@ const InputBar = forwardRef<HTMLInputElement, InputBarProps>(
             value={value}
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder={value ? '' : "Type / to browse commands..."}
+            placeholder={value ? '' : (customPlaceholder ?? "Type / to browse commands...")}
             spellCheck={false}
             autoFocus
           />
