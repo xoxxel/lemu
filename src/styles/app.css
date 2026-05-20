@@ -502,6 +502,22 @@
   gap: 6px;
 }
 
+.input-with-overlay {
+  position: relative;
+  flex: 1;
+}
+
+.prefix-placeholder {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
 .input-bar .mode-indicator {
   color: var(--text-muted);
   user-select: none;

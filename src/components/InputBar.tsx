@@ -33,6 +33,9 @@ const InputBar = forwardRef<HTMLInputElement, InputBarProps>(
       }
     }, [selectedIndex]);
 
+    const showPrefixPlaceholder = customPlaceholder && /^(\*?>)\s*$/.test(value);
+    const prefixOffset = value.startsWith('*>') ? '1.8em' : '0.95em';
+
     return (
       <div className={`input-bar-container mode-${mode}`}>
         {suggestions.length > 0 && (
@@ -65,16 +68,23 @@ const InputBar = forwardRef<HTMLInputElement, InputBarProps>(
         )}
         <div className="input-bar">
           <span className="mode-indicator">{INDICATOR[mode]}</span>
-          <input
-            ref={ref}
-            type="text"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            onKeyDown={onKeyDown}
-            placeholder={value ? '' : (customPlaceholder ?? "Type / to browse commands...")}
-            spellCheck={false}
-            autoFocus
-          />
+          <div className="input-with-overlay">
+            <input
+              ref={ref}
+              type="text"
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              onKeyDown={onKeyDown}
+              placeholder={value ? '' : (customPlaceholder ?? "Type / to browse commands...")}
+              spellCheck={false}
+              autoFocus
+            />
+            {showPrefixPlaceholder && (
+              <span className="prefix-placeholder" style={{ left: prefixOffset }}>
+                {customPlaceholder}
+              </span>
+            )}
+          </div>
           {value && suggestions.length === 0 && (
             <span className="hint">{hint ?? 'Enter to run'}</span>
           )}
