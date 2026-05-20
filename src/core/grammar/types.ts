@@ -132,6 +132,7 @@ export interface GrammarDefinition {
   description?: string;
   usage?: string;
   examples?: string[];
+  aliases?: string[];
   args?: GrammarArgDef[];
   execute: (ctx: GrammarExecuteContext) => Promise<string | void>;
 }

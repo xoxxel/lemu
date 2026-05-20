@@ -148,6 +148,14 @@ export class PluginLoader {
       await plugin.deactivate(this.ctx);
     }
 
+    const unsub = (plugin as unknown as Record<string, unknown>).__unsub as (() => void) | undefined;
+    if (typeof unsub === 'function') {
+      try {
+        unsub();
+      } catch {}
+      delete (plugin as unknown as Record<string, unknown>).__unsub;
+    }
+
     this.registry.deactivate(pluginId);
     this.ctx.events.emit('plugin:deactivated', { id: pluginId });
   }

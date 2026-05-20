@@ -320,6 +320,7 @@ function registerAllWithGrammar(actRegistry: ActionRegistry): void {
       namespace: 'runtime',
       title: act.title || act.id,
       description: act.description,
+      aliases: act.aliases,
       execute: async (ctx) => {
         const actionCtx = {
           tabId: ctx.context.activeTabId,

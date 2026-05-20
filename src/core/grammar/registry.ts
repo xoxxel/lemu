@@ -184,13 +184,14 @@ export class GrammarRegistry {
   private resolveAction(act: ActionNode): GrammarDefinition[] {
     const candidates: GrammarDefinition[] = [];
     for (const [id, def] of this.definitions) {
+      const aliasMatch = def.aliases?.some((alias) => alias === act.id || alias === act.query);
       if (act.global && def.namespace === 'runtime') {
-        if (def.id === act.id || def.id === act.query) {
+        if (def.id === act.id || def.id === act.query || aliasMatch) {
           candidates.push(def);
         }
       }
       if (!act.global && def.namespace === 'plugin') {
-        if (def.id === act.id || def.id === act.query) {
+        if (def.id === act.id || def.id === act.query || aliasMatch) {
           candidates.push(def);
         }
       }
