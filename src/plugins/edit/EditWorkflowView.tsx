@@ -27,9 +27,10 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
 
   const session = sessionRef.current;
 
+  const appCtx = getRuntime().getContext();
   const [renderTick, setRenderTick] = useState(0);
   const [statusMsg, setStatusMsg] = useState('');
-  const [showDiff, setShowDiff] = useState(true);
+  const [showDiff, setShowDiff] = useState(() => appCtx.get<boolean>('edit:diffVisible') ?? true);
   const [cmdInput, setCmdInput] = useState('');
   const [editingRange, setEditingRange] = useState<Range | null>(session.activeRange);
   const codeScrollRef = useRef<HTMLDivElement>(null);
@@ -101,6 +102,18 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
       }
     };
   }, [editingRange]);
+
+  /* ── diff visibility: subscribe to appContext ── */
+  useEffect(() => {
+    appCtx.set('edit:diffVisible', showDiff);
+    appCtx.set('action:suffix:diff', showDiff ? '[on]' : '[off]');
+  }, []);
+
+  useEffect(() => {
+    return appCtx.onChange('edit:diffVisible', (_key, value) => {
+      setShowDiff(value !== false);
+    });
+  }, []);
 
   /* ── scroll helper ── */
   const scrollToLine = useCallback((line: number) => {
@@ -263,7 +276,12 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
         <button style={btnStyle} onClick={handleReject}>Reject</button>
         <button style={btnStyle} onClick={handleRevert}>Revert</button>
         <div style={{ flex: 1 }} />
-        <button style={btnStyle} onClick={() => setShowDiff(v => !v)}>
+        <button style={btnStyle} onClick={() => {
+          const next = !showDiff;
+          setShowDiff(next);
+          appCtx.set('edit:diffVisible', next);
+          appCtx.set('action:suffix:diff', next ? '[on]' : '[off]');
+        }}>
           {showDiff ? 'Editor' : 'Diff'}
         </button>
         {statusMsg && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>{statusMsg}</span>}

@@ -58,6 +58,7 @@ const InputBar = forwardRef<HTMLInputElement, InputBarProps>(
                 ) : (
                   <>
                     <span className="cmd-name">{item.value}</span>
+                    {item.suffix && <span className="cmd-suffix">{item.suffix}</span>}
                     {item.description && <span className="cmd-desc">{item.description}</span>}
                     {item.type && <span className="cmd-type">{item.type}</span>}
                   </>

@@ -374,6 +374,12 @@
   font-weight: 500;
 }
 
+.command-menu-item .cmd-suffix {
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-left: 4px;
+}
+
 .command-menu-item .cmd-desc {
   color: var(--text-secondary);
   font-size: 12px;

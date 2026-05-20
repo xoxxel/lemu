@@ -157,6 +157,20 @@ export const showDiffAction: PluginAction = {
   },
 };
 
+export const diffToggleAction: PluginAction = {
+  id: 'diff',
+  type: 'edit-workflow',
+  title: 'Toggle diff panel',
+  description: 'Toggle diff visibility',
+  handler: async (_ctx) => {
+    const appCtx = getRuntime().getContext();
+    const current = appCtx.get<boolean>('edit:diffVisible') ?? true;
+    appCtx.set('edit:diffVisible', !current);
+    appCtx.set('action:suffix:diff', !current ? '[on]' : '[off]');
+    return `Diff panel ${!current ? 'enabled' : 'disabled'}`;
+  },
+};
+
 export const editWorkflowActions: PluginAction[] = [
   focusAction,
   proposeAction,
@@ -164,4 +178,5 @@ export const editWorkflowActions: PluginAction[] = [
   rejectAction,
   revertAction,
   showDiffAction,
+  diffToggleAction,
 ];

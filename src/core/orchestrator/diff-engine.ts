@@ -19,8 +19,11 @@ export interface DiffResult {
 }
 
 export function computeDiff(original: string, proposed: string): DiffResult {
-  const origLines = original.split('\n');
-  const propLines = proposed.split('\n');
+  // Normalize line endings to avoid spurious diffs caused by CRLF vs LF
+  const origNorm = original.replace(/\r\n/g, '\n');
+  const propNorm = proposed.replace(/\r\n/g, '\n');
+  const origLines = origNorm.split('\n');
+  const propLines = propNorm.split('\n');
   const m = origLines.length;
   const n = propLines.length;
 

@@ -8,6 +8,7 @@ export interface AutocompleteItem {
   value: string;
   description?: string;
   type?: 'file' | 'dir' | 'command' | 'arg' | 'help' | 'action';
+  suffix?: string;
 }
 
 export interface CommandExample {

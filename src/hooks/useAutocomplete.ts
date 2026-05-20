@@ -26,6 +26,7 @@ export function useAutocomplete(scope: CommandScope, activePlugin: { id: string;
         const q = query.toLowerCase();
         return a.id.toLowerCase().includes(q) || a.title?.toLowerCase().includes(q);
       });
+      const ctx = runtime.getContext();
       const seen = new Set<string>();
       setSuggestions(acts.filter(a => {
         if (seen.has(a.id)) return false;
@@ -35,6 +36,7 @@ export function useAutocomplete(scope: CommandScope, activePlugin: { id: string;
         value: '*>' + a.id,
         description: a.title || a.description || '',
         type: 'action' as const,
+        suffix: ctx.get<string>('action:suffix:' + a.id) ?? undefined,
       })));
       setSelectedIndex(0);
       setStatusText(null);
@@ -61,6 +63,7 @@ export function useAutocomplete(scope: CommandScope, activePlugin: { id: string;
         const q = query.toLowerCase();
         return a.id.toLowerCase().includes(q) || a.title?.toLowerCase().includes(q);
       });
+      const ctx = runtime.getContext();
       const seen = new Set<string>();
       setSuggestions(acts.filter(a => {
         if (seen.has(a.id)) return false;
@@ -70,6 +73,7 @@ export function useAutocomplete(scope: CommandScope, activePlugin: { id: string;
         value: '>' + a.id,
         description: a.title || a.description || '',
         type: 'action' as const,
+        suffix: ctx.get<string>('action:suffix:' + a.id) ?? undefined,
       })));
       setSelectedIndex(0);
       setStatusText(null);
