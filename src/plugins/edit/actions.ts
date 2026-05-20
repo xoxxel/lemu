@@ -134,29 +134,6 @@ export const revertAction: PluginAction = {
   },
 };
 
-export const showDiffAction: PluginAction = {
-  id: 'show-diff',
-  type: 'edit-workflow',
-  title: 'Show diff',
-  description: 'Display diff against original',
-  handler: async (ctx) => {
-    const { tabState } = ctx;
-    const original = tabState.originalContent as string;
-    const current = tabState.currentContent as string;
-    if (!original || current === original) return 'No changes to show.';
-
-    const runtime = getRuntime();
-    const pipeline = runtime.getEditPipeline();
-    const suggestion = await pipeline.propose({
-      filePath: tabState.path as string,
-      originalContent: original,
-      proposedContent: current,
-      source: 'user',
-    });
-    return suggestion.diff || '(empty diff)';
-  },
-};
-
 export const diffToggleAction: PluginAction = {
   id: 'diff',
   type: 'edit-workflow',
@@ -177,6 +154,5 @@ export const editWorkflowActions: PluginAction[] = [
   applyAction,
   rejectAction,
   revertAction,
-  showDiffAction,
   diffToggleAction,
 ];
