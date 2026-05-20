@@ -1,4 +1,4 @@
-import type { Operation, OperationHandler, OperationArgs, PipelineContext, Patch } from './types';
+import type { Operation, OperationHandler, OperationArgs, PipelineContext, Patch, ResolvedTarget } from './types';
 
 export class OperationRegistry {
   private handlers = new Map<string, OperationHandler>();
@@ -15,16 +15,24 @@ export class OperationRegistry {
     return Array.from(this.handlers.values());
   }
 
-  resolveScope(op: Operation, ctx: PipelineContext): import('./types').Scope {
-    const handler = this.handlers.get(op.type);
-    if (!handler) return op.scope;
-    return handler.resolveScope(op, ctx);
+  getSupportedScopes(type: string): import('./scope/types').ScopeNodeType[] {
+    const handler = this.handlers.get(type);
+    return handler?.supportedScopes ?? ['document'];
   }
 
-  generatePatches(op: Operation, ctx: PipelineContext): Patch[] {
+  assertScopeSupported(type: string, scopeType: import('./scope/types').ScopeNodeType): string | null {
+    const handler = this.handlers.get(type);
+    if (!handler) return null;
+    if (!handler.supportedScopes.includes(scopeType)) {
+      return `Operation '${type}' does not support scope '${scopeType}'. Supported: ${handler.supportedScopes.join(', ')}`;
+    }
+    return null;
+  }
+
+  generatePatches(op: Operation, ctx: PipelineContext, targets: ResolvedTarget[]): Patch[] {
     const handler = this.handlers.get(op.type);
     if (!handler) return [];
-    return handler.generatePatches(op, ctx);
+    return handler.generatePatches(op, ctx, targets);
   }
 
   createInverse(op: Operation, patches: Patch[], ctx: PipelineContext): Patch[] {

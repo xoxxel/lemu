@@ -1,13 +1,11 @@
-import type { OperationHandler, InsertArgs, Patch, PipelineContext, Scope } from '../types';
+import type { OperationHandler, InsertArgs, Patch, PipelineContext, ResolvedTarget } from '../types';
 
 export const insertHandler: OperationHandler<InsertArgs> = {
   type: 'insert',
 
-  resolveScope(op, _ctx): Scope {
-    return op.scope;
-  },
+  supportedScopes: ['document'],
 
-  generatePatches(op, ctx): Patch[] {
+  generatePatches(op, ctx, _targets): Patch[] {
     const { position, text } = op.args;
     const clampedPos = Math.max(0, Math.min(position, ctx.document.length));
     return [{
@@ -17,7 +15,7 @@ export const insertHandler: OperationHandler<InsertArgs> = {
     }];
   },
 
-  createInverse(op, patches, _ctx): Patch[] {
+  createInverse(_op, patches, _ctx): Patch[] {
     return patches.map(p => ({
       range: { start: p.range.start, end: p.range.start + p.newText.length },
       oldText: p.newText,

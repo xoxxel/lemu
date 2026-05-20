@@ -1,18 +1,20 @@
 import type { Command, CommandResult, AutocompleteItem } from '../../core/commands/types';
 import type { Operation } from '../../core/operations/types';
+import { parseScopeWithDefault } from '../../core/operations/scope/parser';
 
 export const replaceCommand: Command = {
   name: 'replace',
   description: 'Replace all occurrences of a string within the active document',
   aliases: ['sub', 'substitute'],
-  usage: '/replace <old> => <new>',
+  usage: '/replace [scope] <old> => <new>',
   examples: [
-    { input: '/replace foo => bar', description: 'Replace all foo with bar' },
-    { input: '/replace hello => world', description: 'Replace all hello with world' },
+    { input: '/replace foo => bar', description: 'Replace all foo with bar (entire document)' },
+    { input: '/replace 10:20 foo => bar', description: 'Replace in lines 10-20 only' },
+    { input: '/replace selection foo => bar', description: 'Replace in active selection only' },
   ],
   validate(args) {
     const full = args.join(' ');
-    if (!full.includes('=>')) return 'Usage: /replace <old> => <new>';
+    if (!full.includes('=>')) return 'Usage: /replace [scope] <old> => <new>';
     return null;
   },
   async autocomplete(_args: string[]): Promise<AutocompleteItem[]> {
@@ -20,12 +22,16 @@ export const replaceCommand: Command = {
   },
   async execute(args) {
     const full = args.join(' ');
-    const sepIndex = full.indexOf('=>');
+
+    /* Parse scope from the first expression, then look for => in the remainder */
+    const { node: scopeNode, remaining } = parseScopeWithDefault(full);
+
+    const sepIndex = remaining.indexOf('=>');
     if (sepIndex === -1) {
-      return { success: false, message: 'Usage: /replace <old> => <new>' };
+      return { success: false, message: 'Usage: /replace [scope] <old> => <new>' };
     }
-    const oldText = full.slice(0, sepIndex).trim();
-    const newText = full.slice(sepIndex + 2).trim();
+    const oldText = remaining.slice(0, sepIndex).trim();
+    const newText = remaining.slice(sepIndex + 2).trim();
 
     if (!oldText) {
       return { success: false, message: 'Replace: old text is required' };
@@ -40,7 +46,7 @@ export const replaceCommand: Command = {
 
     const operation: Operation = {
       type: 'replace',
-      scope: { type: 'document' },
+      scope: scopeNode,
       args: { oldText, newText },
     };
 

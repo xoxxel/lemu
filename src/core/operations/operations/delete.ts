@@ -1,13 +1,11 @@
-import type { OperationHandler, DeleteArgs, Patch, PipelineContext, Scope } from '../types';
+import type { OperationHandler, DeleteArgs, Patch, PipelineContext, ResolvedTarget } from '../types';
 
 export const deleteHandler: OperationHandler<DeleteArgs> = {
   type: 'delete',
 
-  resolveScope(op, _ctx): Scope {
-    return op.scope;
-  },
+  supportedScopes: ['document'],
 
-  generatePatches(op, ctx): Patch[] {
+  generatePatches(op, ctx, _targets): Patch[] {
     const { range } = op.args;
     const clampedStart = Math.max(0, Math.min(range.start, ctx.document.length));
     const clampedEnd = Math.max(clampedStart, Math.min(range.end, ctx.document.length));
@@ -19,7 +17,7 @@ export const deleteHandler: OperationHandler<DeleteArgs> = {
     }];
   },
 
-  createInverse(op, patches, _ctx): Patch[] {
+  createInverse(_op, patches, _ctx): Patch[] {
     return patches.map(p => ({
       range: p.range,
       oldText: '',

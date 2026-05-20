@@ -5,6 +5,7 @@ import type {
 import { PipelineStageName } from './types';
 import type { OperationRegistry } from './registry';
 import { validatePatches, applyPatches, invertPatches } from './patch';
+import { resolveScopeNode } from './scope/resolver';
 
 export class TransactionPipeline {
   private history: HistoryEntry[] = [];
@@ -24,36 +25,49 @@ export class TransactionPipeline {
   ): Promise<OperationResult> {
     const startTime = Date.now();
 
-    /* 1. ResolveScope */
-    const resolvedScope = await this.trace(
-      PipelineStageName.ResolveScope,
-      operation,
-      () => this.registry.resolveScope(operation, ctx),
-    );
-    const resolvedOp = { ...operation, scope: resolvedScope };
-
-    /* 2. Validate */
+    /* 1. Validate operation */
     const validationError = await this.trace(
       PipelineStageName.Validate,
-      resolvedOp,
-      () => this.registry.validate(resolvedOp, ctx),
+      operation,
+      () => this.registry.validate(operation, ctx),
     );
     if (validationError) {
       return { success: false, error: validationError };
     }
 
-    /* 3. GeneratePatches */
+    /* 2. Check scope capability */
+    const scopeError = await this.trace(
+      PipelineStageName.ResolveScope,
+      operation,
+      () => this.registry.assertScopeSupported(operation.type, operation.scope.type),
+    );
+    if (scopeError) {
+      return { success: false, error: scopeError };
+    }
+
+    /* 3. Resolve scope to concrete targets */
+    const resolved = await this.trace(
+      PipelineStageName.ResolveScope,
+      operation.scope,
+      () => resolveScopeNode(operation.scope, ctx),
+    );
+
+    if (resolved.targets.length === 0) {
+      return { success: false, error: `Scope '${resolved.label}' produced no targets` };
+    }
+
+    /* 4. Generate patches from resolved targets */
     const patches = await this.trace(
       PipelineStageName.GeneratePatches,
-      resolvedOp,
-      () => this.registry.generatePatches(resolvedOp, ctx),
+      operation,
+      () => this.registry.generatePatches(operation, ctx, resolved.targets),
     );
 
     if (patches.length === 0) {
       return { success: false, error: 'Operation produced no patches' };
     }
 
-    /* 4. Validate patches against current document */
+    /* 5. Validate patches against current document */
     const patchError = await this.trace(
       PipelineStageName.Validate,
       patches,
@@ -63,20 +77,21 @@ export class TransactionPipeline {
       return { success: false, error: patchError };
     }
 
-    /* 5. Build transaction */
+    /* 6. Build transaction */
     const inverse = invertPatches(patches);
     const transaction: Transaction = {
       id: generateTransactionId(),
-      operation: resolvedOp,
+      operation,
       patches,
       inverse,
       timestamp: Date.now(),
       metadata: {
         duration: Date.now() - startTime,
+        resolvedScope: resolved.label,
       },
     };
 
-    /* 6. Commit */
+    /* 7. Commit */
     let newDocument: string;
     try {
       newDocument = await this.trace(
@@ -91,7 +106,7 @@ export class TransactionPipeline {
       };
     }
 
-    /* 7. Record history */
+    /* 8. Record history */
     const entry: HistoryEntry = {
       transaction,
       timestamp: Date.now(),
@@ -112,6 +127,7 @@ export class TransactionPipeline {
       metadata: {
         duration: Date.now() - startTime,
         newDocument,
+        resolvedScope: resolved.label,
       },
     };
   }

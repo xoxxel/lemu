@@ -1,33 +1,11 @@
+import type { ScopeNode, ScopeNodeType, ResolvedTarget, ResolvedScope } from './scope/types';
+
 export type OperationType = 'replace' | 'insert' | 'delete' | 'rangeEdit' | 'aiTransform';
 
-export type ScopeType = 'document' | 'lineRange' | 'selection' | 'syntax' | 'workspace';
+/* ── Scope — delegates to formal scope system ── */
+export type { ScopeNode, ScopeNodeType, ResolvedTarget, ResolvedScope };
 
-export interface DocumentScope {
-  type: 'document';
-}
-
-export interface LineRangeScope {
-  type: 'lineRange';
-  startLine: number;
-  endLine: number;
-}
-
-export interface SelectionScope {
-  type: 'selection';
-}
-
-export interface SyntaxScope {
-  type: 'syntax';
-  kind: string;
-}
-
-export interface WorkspaceScope {
-  type: 'workspace';
-  pattern?: string;
-}
-
-export type Scope = DocumentScope | LineRangeScope | SelectionScope | SyntaxScope | WorkspaceScope;
-
+/* ── Operation args ── */
 export interface ReplaceArgs {
   oldText: string;
   newText: string;
@@ -57,7 +35,7 @@ export type OperationArgs = ReplaceArgs | InsertArgs | DeleteArgs | RangeEditArg
 
 export interface Operation<T extends OperationArgs = OperationArgs> {
   type: OperationType;
-  scope: Scope;
+  scope: ScopeNode;
   args: T;
   metadata?: Record<string, unknown>;
 }
@@ -87,8 +65,8 @@ export interface OperationResult {
 
 export interface OperationHandler<T extends OperationArgs = OperationArgs> {
   type: OperationType;
-  resolveScope(op: Operation<T>, ctx: PipelineContext): Scope;
-  generatePatches(op: Operation<T>, ctx: PipelineContext): Patch[];
+  supportedScopes: ScopeNodeType[];
+  generatePatches(op: Operation<T>, ctx: PipelineContext, targets: ResolvedTarget[]): Patch[];
   createInverse(op: Operation<T>, patches: Patch[], ctx: PipelineContext): Patch[];
   validate(op: Operation<T>, ctx: PipelineContext): string | null;
 }
@@ -125,10 +103,6 @@ export interface PipelineEvent {
   input: unknown;
   output: unknown;
   duration: number;
-}
-
-export interface OperationScopeResolver {
-  resolve(scope: Scope, ctx: PipelineContext): Scope;
 }
 
 export interface HistoryEntry {

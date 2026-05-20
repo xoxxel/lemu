@@ -23,8 +23,10 @@ import { grammarRegistry, suggestionEngine } from '../grammar';
 import type { GrammarContext, GrammarSuggestion } from '../grammar';
 import { registry as cmdRegistry } from '../commands/registry';
 import { OwnershipManager, type OwnershipState } from '../ownership';
-import { OperationRegistry, TransactionPipeline, replaceHandler, insertHandler, deleteHandler } from '../operations';
+import { OperationRegistry, TransactionPipeline, replaceHandler, insertHandler, deleteHandler, ScopeCapabilityRegistry, parseScope } from '../operations';
+import { resolveScopeNode } from '../operations/scope/resolver';
 import type { OperationResult, PipelineContext, Operation } from '../operations';
+import type { ScopeNode, ResolvedScope } from '../operations/scope/types';
 
 const appWrappers: unknown[] = [];
 
@@ -181,6 +183,11 @@ export interface Runtime {
     registry: OperationRegistry;
     pipeline: TransactionPipeline;
     run(op: Operation, ctx: PipelineContext): Promise<OperationResult>;
+  };
+  scope: {
+    parse(input: string): { node: ScopeNode | null; remaining: string };
+    resolve(node: ScopeNode, ctx: PipelineContext): ResolvedScope;
+    capabilities: ScopeCapabilityRegistry;
   };
   /** Set by App.tsx — provides the active editor tab's state for commands */
   editorContext: PipelineContext;
@@ -369,10 +376,14 @@ export async function createRuntime(): Promise<Runtime> {
     feedbackService.show(payload as FeedbackEvent);
   });
   const ownershipManager = new OwnershipManager();
+  const scopeCapabilityRegistry = new ScopeCapabilityRegistry();
   const operationRegistry = new OperationRegistry();
   operationRegistry.register(replaceHandler);
   operationRegistry.register(insertHandler);
   operationRegistry.register(deleteHandler);
+  for (const h of operationRegistry.getAll()) {
+    scopeCapabilityRegistry.register(h.type, h.supportedScopes);
+  }
   const operationPipeline = new TransactionPipeline(operationRegistry);
   const editorContext: PipelineContext = { document: '', path: '', state: {} };
   const pluginContext = createPluginContext(actionRegistry, viewComponentMap, viewMetaMap);
@@ -594,6 +605,13 @@ export async function createRuntime(): Promise<Runtime> {
       async run(op: Operation, ctx: PipelineContext): Promise<OperationResult> {
         return operationPipeline.run(op, ctx);
       },
+    },
+    scope: {
+      parse(input: string) { return parseScope(input); },
+      resolve(node: ScopeNode, ctx: PipelineContext): ResolvedScope {
+        return resolveScopeNode(node, ctx);
+      },
+      capabilities: scopeCapabilityRegistry,
     },
     editorContext,
 
