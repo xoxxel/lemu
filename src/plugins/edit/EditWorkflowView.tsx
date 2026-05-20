@@ -119,6 +119,39 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
       setActiveRange(null);
       setEditBuffer('');
       e.preventDefault();
+      return;
+    }
+
+    // Support the '<<' / '>>' marker workflow: when user types '<<' (commit) or '>>' (cancel)
+    // and then presses Enter, treat that as submit/cancel. This allows Enter to both
+    // create newlines and act as submit when the marker is typed immediately before caret.
+    if (e.key === 'Enter' && textareaRef.current && activeRange) {
+      const ta = textareaRef.current;
+      const pos = ta.selectionStart ?? ta.value.length;
+      const before = ta.value.slice(Math.max(0, pos - 2), pos);
+      if (before === '<<' || before === '>>') {
+        e.preventDefault();
+        // remove marker from buffer
+        const newBuffer = ta.value.slice(0, pos - 2) + ta.value.slice(pos);
+        setEditBuffer(newBuffer);
+
+        if (before === '<<') {
+          if (newBuffer !== getRangeContent(currentContent, activeRange)) {
+            const newContent = replaceRange(currentContent, activeRange, newBuffer);
+            setCurrentContent(newContent);
+            setStatus('idle');
+            setStatusMsg('Edit committed.');
+          } else {
+            setStatusMsg('No changes to commit.');
+          }
+        } else {
+          // '>>' -> cancel/close active range without applying
+          setStatusMsg('Cancelled.');
+        }
+
+        setActiveRange(null);
+        setEditBuffer('');
+      }
     }
   }, [editBuffer, currentContent, activeRange]);
 
@@ -446,7 +479,7 @@ function DiffView({ original, current }: { original: string; current: string }) 
       {diff.hunks.map((hunk, i) => (
         <div key={i}>
           <div style={{ color: 'var(--text-muted)', padding: '2px 0', fontSize: 11 }}>
-            @@ -{hunk.start},{hunk.end} @@
+            @@ -{hunk.origStart},{hunk.origCount} +{hunk.newStart},{hunk.newCount} @@
           </div>
           {hunk.lines.map((line, j) => (
             <div key={j} style={{

@@ -29,7 +29,7 @@ export const editPlugin: Plugin = {
       examples: ['10', '10 20'],
     },
     placeholders: {
-      defaultPlaceholder: 'Type range do you want edit e.g. "> 10" or "> 10 20" or chose action',
+      defaultPlaceholder: 'Type > and chose action',
       primaryPlaceholder: 'chose action or type range, e.g. ">10" or ">10 20"',
     },
   },
