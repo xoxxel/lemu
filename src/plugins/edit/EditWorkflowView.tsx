@@ -31,7 +31,6 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
   const [renderTick, setRenderTick] = useState(0);
   const [statusMsg, setStatusMsg] = useState('');
   const [showDiff, setShowDiff] = useState(() => appCtx.get<boolean>('edit:diffVisible') ?? true);
-  const [cmdInput, setCmdInput] = useState('');
   const [editingRange, setEditingRange] = useState<Range | null>(session.activeRange);
   const codeScrollRef = useRef<HTMLDivElement>(null);
   const rangeMountRef = useRef<HTMLDivElement>(null) as React.RefObject<HTMLDivElement>;
@@ -127,50 +126,6 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
     const runtime = getRuntime();
     runtime.getContext().set('edit:rangeContent', session.getRangeContent(range));
   }, [session]);
-
-  /* ── cmd input ── */
-  const handleCmdSubmit = useCallback(() => {
-    const trimmed = cmdInput.trim();
-    setCmdInput('');
-    if (!trimmed) return;
-
-    if (editingRange && (trimmed === '<<' || trimmed === '>>')) {
-      if (trimmed === '<<') {
-        const op = session.commitRange();
-        setStatusMsg(op ? 'Edit committed.' : 'No changes to commit.');
-      } else {
-        session.cancelRange();
-        setStatusMsg('Cancelled.');
-      }
-      setEditingRange(null);
-      rerender();
-      return;
-    }
-
-    const parsed = parseRangeInput(trimmed);
-    if (parsed) {
-      const clamped = clampRange(parsed, session.lineCount);
-      session.setActiveRange(clamped);
-      setEditingRange(clamped);
-      setEditBufferFromRange(clamped);
-      scrollToLine(clamped.start);
-      setStatusMsg(`Editing lines ${clamped.start}-${clamped.end}`);
-      rerender();
-      return;
-    }
-
-    setStatusMsg(`Unknown: "${trimmed}"`);
-  }, [cmdInput, session, editingRange, scrollToLine, setEditBufferFromRange, rerender]);
-
-  const handleCmdKey = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleCmdSubmit();
-    else if (e.key === 'Escape' && editingRange) {
-      session.cancelRange();
-      setEditingRange(null);
-      setStatusMsg('Cancelled.');
-      rerender();
-    }
-  }, [handleCmdSubmit, editingRange, session, rerender]);
 
   /* ── workflow handlers ── */
   const handlePropose = async () => {
@@ -339,26 +294,6 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
         )}
       </div>
 
-      {/* command bar */}
-      <div style={{
-        borderTop: '0.5px solid var(--border)', display: 'flex', alignItems: 'center',
-        background: 'var(--bg-secondary)', flexShrink: 0,
-      }}>
-        <span style={{ padding: '0 0 0 12px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>{'>'}</span>
-        <input
-          type="text"
-          value={cmdInput}
-          onChange={e => setCmdInput(e.target.value)}
-          onKeyDown={handleCmdKey}
-          placeholder={editingRange ? '<< to commit · >> or Esc to cancel' : '10 to focus line · 10 15 to focus range'}
-          style={{
-            flex: 1, border: 'none', outline: 'none', padding: '10px 12px',
-            background: 'transparent', color: 'var(--text-primary)',
-            fontFamily: 'var(--font-mono)', fontSize: 13,
-          }}
-          spellCheck={false}
-        />
-      </div>
     </div>
   );
 }
