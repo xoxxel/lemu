@@ -565,6 +565,61 @@
   white-space: nowrap;
 }
 
+.ownership-indicator {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 0;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.02);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  text-transform: lowercase;
+  pointer-events: none;
+}
+
+.ownership-indicator.active {
+  color: var(--text-primary);
+  border-color: rgba(80, 140, 220, 0.25);
+  background: rgba(80, 140, 220, 0.06);
+}
+
+.ownership-toggle {
+  width: 24px;
+  height: 12px;
+  border-radius: 0;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  position: relative;
+}
+
+.ownership-indicator.active .ownership-toggle {
+  background: rgba(80, 140, 220, 0.18);
+  border-color: rgba(80, 140, 220, 0.3);
+}
+
+.ownership-toggle::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 0;
+  background: #fff;
+  top: 1px;
+  left: 1px;
+  transition: left 0.15s ease;
+}
+
+.ownership-indicator.active .ownership-toggle::after {
+  left: 13px;
+}
+
 /* ── Syntax Highlight ───────────────────────────────────────────── */
 
 .syntax-highlight {

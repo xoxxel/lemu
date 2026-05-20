@@ -740,6 +740,13 @@ export default function App() {
           selectedIndex={selectedIndex}
           hint={statusText}
           mode={inputMode}
+          ownedModeLabel={(() => {
+            const owner = getRuntime().ownership.getOwner();
+            if (!owner) return undefined;
+            if (owner.actionId === 'find') return 'find mode';
+            return `${owner.actionId} mode`;
+          })()}
+          ownedModeActive={!!getRuntime().ownership.getOwner()}
           customPlaceholder={(() => {
             const owner = getRuntime().ownership.getOwner();
             if (owner && owner.pluginId === 'fs') {

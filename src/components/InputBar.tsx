@@ -13,6 +13,8 @@ interface InputBarProps {
   hint?: string | null;
   mode?: InputMode;
   customPlaceholder?: string;
+  ownedModeLabel?: string;
+  ownedModeActive?: boolean;
 }
 
 const INDICATOR: Record<InputMode, string> = {
@@ -22,7 +24,7 @@ const INDICATOR: Record<InputMode, string> = {
 };
 
 const InputBar = forwardRef<HTMLInputElement, InputBarProps>(
-  ({ value, onChange, onKeyDown, suggestions, selectedIndex, onSuggestionClick, hint, mode = 'normal', customPlaceholder }, ref) => {
+  ({ value, onChange, onKeyDown, suggestions, selectedIndex, onSuggestionClick, hint, mode = 'normal', customPlaceholder, ownedModeLabel, ownedModeActive }, ref) => {
     const menuRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -84,6 +86,12 @@ const InputBar = forwardRef<HTMLInputElement, InputBarProps>(
               <span className="prefix-placeholder" style={{ left: prefixOffset }}>
                 {customPlaceholder}
               </span>
+            )}
+            {typeof ownedModeLabel !== 'undefined' && (
+              <div className={`ownership-indicator${ownedModeActive ? ' active' : ''}`}>
+                <span>{ownedModeLabel}</span>
+                <span className="ownership-toggle" />
+              </div>
             )}
           </div>
           {value && suggestions.length === 0 && (
