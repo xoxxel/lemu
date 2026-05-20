@@ -1,11 +1,25 @@
 import { EditorState, Transaction, ChangeSet } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
+import { highlightSelectionMatches } from '@codemirror/search';
 import { history, undo, redo } from '@codemirror/commands';
 import type { Extension } from '@codemirror/state';
 import { computeDiff } from '../orchestrator/diff-engine';
 import type { DiffResult } from '../orchestrator/diff-engine';
 import type { Range, PatchOperation } from './document';
 import type { LineState } from './line-metadata';
+
+export interface SearchMatch {
+  from: number;
+  to: number;
+  line: number;
+}
+
+export interface SearchSession {
+  query: string;
+  matches: SearchMatch[];
+  matchIndex: number;
+  totalMatches: number;
+}
 
 export class CMEditorSession {
   readonly originalContent: string;
@@ -18,6 +32,9 @@ export class CMEditorSession {
   private _onChangeHandler: (() => void) | null = null;
   private _onCommitHandler: ((content: string) => void) | null = null;
   private _onCancelHandler: (() => void) | null = null;
+  private _searchQuery: string = '';
+  private _searchMatches: SearchMatch[] = [];
+  private _searchMatchIndex: number = -1;
 
   constructor(config: { originalContent: string; initialContent?: string }) {
     this.originalContent = config.originalContent;
@@ -82,6 +99,7 @@ export class CMEditorSession {
       '.cm-gutters': { display: 'none !important' },
       '.cm-foldPlaceholder': { display: 'none !important' },
       '&.cm-focused': { outline: 'none !important' },
+      '.cm-selectionMatch': { backgroundColor: 'rgba(255,152,0,0.12) !important' },
     });
 
     let rangeView: EditorView;
@@ -119,6 +137,7 @@ export class CMEditorSession {
       doc: content,
       extensions: [
         history(),
+        highlightSelectionMatches(),
         keymap.of(keyBindings),
         EditorView.updateListener.of(update => {
           if (!update.docChanged) return;
@@ -195,11 +214,82 @@ export class CMEditorSession {
     this._changeAccum = ChangeSet.empty(this._fullState.doc.length);
     this._cleanupRangeView();
     this._activeRange = null;
+    this._searchQuery = '';
+    this._searchMatches = [];
+    this._searchMatchIndex = -1;
   }
 
   getDiff(): DiffResult {
     return computeDiff(this.originalContent, this.content);
   }
+
+  /* ── search ── */
+
+  get searchSession(): SearchSession {
+    return {
+      query: this._searchQuery,
+      matches: this._searchMatches,
+      matchIndex: this._searchMatchIndex,
+      totalMatches: this._searchMatches.length,
+    };
+  }
+
+  find(query: string): void {
+    this._searchQuery = query;
+    this._searchMatches = [];
+    this._searchMatchIndex = -1;
+
+    if (!query) return;
+
+    const docStr = this._fullState.doc.toString();
+    const lowerDoc = docStr.toLowerCase();
+    const lowerQuery = query.toLowerCase();
+    const matches: SearchMatch[] = [];
+    let pos = 0;
+    while (pos < docStr.length) {
+      const idx = lowerDoc.indexOf(lowerQuery, pos);
+      if (idx === -1) break;
+      const line = this._fullState.doc.lineAt(idx).number;
+      matches.push({ from: idx, to: idx + query.length, line });
+      pos = idx + query.length;
+    }
+
+    this._searchMatches = matches;
+    if (matches.length > 0) {
+      this._searchMatchIndex = 0;
+      this._scrollToMatch(matches[0]);
+    }
+  }
+
+  nextMatch(): void {
+    if (this._searchMatches.length === 0) return;
+    this._searchMatchIndex = (this._searchMatchIndex + 1) % this._searchMatches.length;
+    this._scrollToMatch(this._searchMatches[this._searchMatchIndex]);
+  }
+
+  prevMatch(): void {
+    if (this._searchMatches.length === 0) return;
+    const n = this._searchMatches.length;
+    this._searchMatchIndex = (this._searchMatchIndex - 1 + n) % n;
+    this._scrollToMatch(this._searchMatches[this._searchMatchIndex]);
+  }
+
+  private _scrollToMatch(match: SearchMatch): void {
+    if (this._rangeView && this._activeRange) {
+      const rangeStart = this._lineStart(this._activeRange.start);
+      const rangeEnd = this._lineEnd(this._activeRange.end);
+      if (match.from >= rangeStart && match.to <= rangeEnd) {
+        const localFrom = match.from - rangeStart;
+        const localTo = match.to - rangeStart;
+        this._rangeView.dispatch({
+          selection: { anchor: localFrom, head: localTo },
+          scrollIntoView: true,
+        });
+      }
+    }
+  }
+
+  /* ── line metadata ── */
 
   getLineMetadata(): LineState[] {
     const doc = this._fullState.doc;
@@ -218,6 +308,15 @@ export class CMEditorSession {
       const target = wasEmpty ? insertedLines : modifiedLines;
       for (let l = startLine; l <= endLine; l++) target.add(l);
     });
+
+    const searchLines = new Set<number>();
+    let activeSearchLine = -1;
+    if (this._searchQuery && this._searchMatches.length > 0) {
+      for (const m of this._searchMatches) searchLines.add(m.line);
+      if (this._searchMatchIndex >= 0 && this._searchMatchIndex < this._searchMatches.length) {
+        activeSearchLine = this._searchMatches[this._searchMatchIndex].line;
+      }
+    }
 
     const maxLines = Math.max(origLines.length, currentLines.length);
     const result: LineState[] = [];
@@ -251,6 +350,8 @@ export class CMEditorSession {
         isReadonly: this._activeRange === null
           || n < this._activeRange.start
           || n > this._activeRange.end,
+        isSearchMatch: searchLines.has(n),
+        isActiveSearchMatch: n === activeSearchLine,
       });
     }
 

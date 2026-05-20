@@ -10,6 +10,8 @@ export interface LineState {
   isDeleted: boolean;
   isActiveRange: boolean;
   isReadonly: boolean;
+  isSearchMatch: boolean;
+  isActiveSearchMatch: boolean;
 }
 
 /**
@@ -52,6 +54,8 @@ export function computeLineMetadata(
       isDeleted,
       isActiveRange: inActiveRange,
       isReadonly: !inActiveRange,
+      isSearchMatch: false,
+      isActiveSearchMatch: false,
     });
   }
 

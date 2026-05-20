@@ -26,14 +26,17 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
   }));
 
   const session = sessionRef.current;
-
   const appCtx = getRuntime().getContext();
+
   const [renderTick, setRenderTick] = useState(0);
   const [statusMsg, setStatusMsg] = useState('');
   const [showDiff, setShowDiff] = useState(() => appCtx.get<boolean>('edit:diffVisible') ?? true);
+  const [cmdInput, setCmdInput] = useState('');
   const [editingRange, setEditingRange] = useState<Range | null>(session.activeRange);
+  const [searchMode, setSearchMode] = useState(false);
   const codeScrollRef = useRef<HTMLDivElement>(null);
   const rangeMountRef = useRef<HTMLDivElement>(null) as React.RefObject<HTMLDivElement>;
+  const cmdInputRef = useRef<HTMLInputElement>(null);
 
   const rerender = useCallback(() => setRenderTick(t => t + 1), []);
 
@@ -55,7 +58,6 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
       const clamped = clampRange(range, session.lineCount);
       session.setActiveRange(clamped);
       setEditingRange(clamped);
-      setEditBufferFromRange(clamped);
       scrollToLine(clamped.start);
       rerender();
     }
@@ -71,15 +73,10 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
   /* ── CM6 range view mount ── */
   useEffect(() => {
     if (!editingRange || !rangeMountRef.current) return;
-
     const view = session.mountRangeView(rangeMountRef.current);
-    if (!view) {
-      setEditingRange(null);
-      return;
-    }
-
+    if (!view) { setEditingRange(null); return; }
     session.onChange(() => rerender());
-    session.onCommit((_content: string) => {
+    session.onCommit(() => {
       const op = session.commitRange();
       setStatusMsg(op ? 'Edit committed.' : 'No changes to commit.');
       setEditingRange(null);
@@ -91,28 +88,25 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
       setEditingRange(null);
       rerender();
     });
-
     view.focus();
-
     return () => {
-      if (session.activeRange) {
-        session.destroy();
-        session.setActiveRange(null);
-      }
+      if (session.activeRange) { session.destroy(); session.setActiveRange(null); }
     };
   }, [editingRange]);
 
-  /* ── diff visibility: subscribe to appContext ── */
+  /* ── diff visibility: subscribe ── */
   useEffect(() => {
     appCtx.set('edit:diffVisible', showDiff);
     appCtx.set('action:suffix:diff', showDiff ? '[on]' : '[off]');
   }, []);
-
   useEffect(() => {
-    return appCtx.onChange('edit:diffVisible', (_key, value) => {
-      setShowDiff(value !== false);
-    });
+    return appCtx.onChange('edit:diffVisible', (_k, v) => { setShowDiff(v !== false); });
   }, []);
+
+  /* ── focus cmd input when search mode activated ── */
+  useEffect(() => {
+    if (searchMode && cmdInputRef.current) cmdInputRef.current.focus();
+  }, [searchMode]);
 
   /* ── scroll helper ── */
   const scrollToLine = useCallback((line: number) => {
@@ -121,17 +115,108 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
     el.scrollTop = Math.max(0, (line - 1) * LINE_HEIGHT - el.clientHeight / 3);
   }, []);
 
-  /* ── set edit buffer from range ── */
-  const setEditBufferFromRange = useCallback((range: Range) => {
-    const runtime = getRuntime();
-    runtime.getContext().set('edit:rangeContent', session.getRangeContent(range));
-  }, [session]);
+  /* ── search: subscribe to appContext navigation/execute ── */
+  useEffect(() => {
+    const us = [
+      appCtx.onChange('edit:search:navigate', (_k, v) => {
+        if (v === 'next') session.nextMatch();
+        else if (v === 'prev') session.prevMatch();
+        const current = session.searchSession.matches[session.searchSession.matchIndex];
+        if (current) scrollToLine(current.line);
+        rerender();
+      }),
+      appCtx.onChange('edit:search:execute', (_k, v) => {
+        if (typeof v === 'string') { session.find(v); setSearchMode(false); rerender(); }
+      }),
+      appCtx.onChange('edit:search:mode', (_k, v) => {
+        setSearchMode(v === true);
+        if (v === true) rerender();
+      }),
+    ];
+    return () => us.forEach(u => u());
+  }, [scrollToLine]);
+
+  /* ── search execution from internal bar ── */
+  const executeSearch = useCallback((query: string) => {
+    session.find(query);
+    setSearchMode(false);
+    appCtx.set('edit:search:mode', false);
+    const ss = session.searchSession;
+    if (ss.totalMatches > 0) {
+      setStatusMsg(`${ss.totalMatches} match(es) for "${query}"`);
+      scrollToLine(ss.matches[0].line);
+    } else {
+      setStatusMsg(`No matches for "${query}"`);
+    }
+    rerender();
+  }, [session, scrollToLine, rerender]);
+
+  /* ── cmd input handlers ── */
+  const handleCmdSubmit = useCallback(() => {
+    const trimmed = cmdInput.trim();
+    setCmdInput('');
+    if (!trimmed) return;
+
+    if (searchMode) { executeSearch(trimmed); return; }
+
+    if (editingRange && (trimmed === '<<' || trimmed === '>>')) {
+      if (trimmed === '<<') {
+        const op = session.commitRange();
+        setStatusMsg(op ? 'Edit committed.' : 'No changes to commit.');
+      } else { session.cancelRange(); setStatusMsg('Cancelled.'); }
+      setEditingRange(null); rerender();
+      return;
+    }
+
+    if (trimmed === 'find') { setSearchMode(true); setStatusMsg('Type search query...'); return; }
+
+    if (trimmed === 'next' && session.searchSession.totalMatches > 0) {
+      session.nextMatch();
+      const m = session.searchSession.matches[session.searchSession.matchIndex];
+      if (m) scrollToLine(m.line);
+      setStatusMsg(`Match ${session.searchSession.matchIndex + 1} of ${session.searchSession.totalMatches}`);
+      rerender(); return;
+    }
+
+    if (trimmed === 'prev' && session.searchSession.totalMatches > 0) {
+      session.prevMatch();
+      const m = session.searchSession.matches[session.searchSession.matchIndex];
+      if (m) scrollToLine(m.line);
+      setStatusMsg(`Match ${session.searchSession.matchIndex + 1} of ${session.searchSession.totalMatches}`);
+      rerender(); return;
+    }
+
+    const parsed = parseRangeInput(trimmed);
+    if (parsed) {
+      const clamped = clampRange(parsed, session.lineCount);
+      session.setActiveRange(clamped);
+      setEditingRange(clamped);
+      scrollToLine(clamped.start);
+      setStatusMsg(`Editing lines ${clamped.start}-${clamped.end}`);
+      rerender(); return;
+    }
+
+    setStatusMsg(`Unknown: "${trimmed}"`);
+  }, [cmdInput, session, editingRange, searchMode, scrollToLine, executeSearch, rerender]);
+
+  const handleCmdKey = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleCmdSubmit();
+    else if (e.key === 'Escape') {
+      if (searchMode) {
+        setSearchMode(false);
+        appCtx.set('edit:search:mode', false);
+        setStatusMsg(''); rerender();
+      } else if (editingRange) {
+        session.cancelRange(); setEditingRange(null);
+        setStatusMsg('Cancelled.'); rerender();
+      }
+    }
+  }, [handleCmdSubmit, editingRange, searchMode, session, rerender]);
 
   /* ── workflow handlers ── */
   const handlePropose = async () => {
     const runtime = getRuntime();
-    const pipeline = runtime.getEditPipeline();
-    const suggestion = await pipeline.propose({
+    const suggestion = await runtime.getEditPipeline().propose({
       filePath: (state as Record<string, string>).path ?? '',
       originalContent: session.originalContent,
       proposedContent: session.content,
@@ -144,10 +229,9 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
 
   const handleApply = async () => {
     const runtime = getRuntime();
-    const appCtx = runtime.getContext();
-    const suggestionId = appCtx.get<string>('edit:pending:active');
-    if (!suggestionId) { setStatusMsg('No pending proposal.'); return; }
-    const result = await runtime.getEditPipeline().approve(suggestionId);
+    const sid = runtime.getContext().get<string>('edit:pending:active');
+    if (!sid) { setStatusMsg('No pending proposal.'); return; }
+    const result = await runtime.getEditPipeline().approve(sid);
     if (!result) { setStatusMsg('Suggestion not found.'); return; }
     try {
       const res = await fetch('/api/fs/write', {
@@ -161,30 +245,22 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
       setStatusMsg(`Write failed: ${err instanceof Error ? err.message : String(err)}`);
       return;
     }
-    appCtx.remove('edit:pending:active');
+    runtime.getContext().remove('edit:pending:active');
     setStatusMsg(`Applied to ${result.filePath}`);
     rerender();
   };
 
   const handleReject = () => {
     const runtime = getRuntime();
-    const appCtx = runtime.getContext();
-    const suggestionId = appCtx.get<string>('edit:pending:active');
-    if (suggestionId) {
-      runtime.getEditPipeline().reject(suggestionId, 'Rejected in view');
-      appCtx.remove('edit:pending:active');
-    }
-    setStatusMsg('Proposal rejected.');
-    rerender();
+    const sid = runtime.getContext().get<string>('edit:pending:active');
+    if (sid) { runtime.getEditPipeline().reject(sid, 'Rejected in view'); runtime.getContext().remove('edit:pending:active'); }
+    setStatusMsg('Proposal rejected.'); rerender();
   };
 
   const handleRevert = () => {
-    const runtime = getRuntime();
-    runtime.getContext().remove('edit:pending:active');
-    session.reset();
-    setEditingRange(null);
-    setStatusMsg('Reverted to original.');
-    rerender();
+    getRuntime().getContext().remove('edit:pending:active');
+    session.reset(); setEditingRange(null);
+    setStatusMsg('Reverted to original.'); rerender();
   };
 
   /* ── derived data ── */
@@ -202,7 +278,6 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* header */}
       <header style={{
         padding: '8px 16px', borderBottom: '0.5px solid var(--border)',
         background: 'var(--bg-secondary)', fontSize: 12,
@@ -221,7 +296,6 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
         </span>
       </header>
 
-      {/* toolbar */}
       <div style={{
         padding: '4px 8px', borderBottom: '0.5px solid var(--border)',
         display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0,
@@ -242,24 +316,18 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
         {statusMsg && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>{statusMsg}</span>}
       </div>
 
-      {/* main area: code + diff */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         <div ref={codeScrollRef} style={{
           flex: showDiff ? '0 0 70%' : '1 1 100%', overflow: 'auto',
           background: 'var(--bg-primary)', position: 'relative',
         }}>
           {editingRange ? (
-            <RangeCodeView
-              lineMetadata={lineMetadata}
-              range={editingRange}
-              rangeMountRef={rangeMountRef}
-            />
+            <RangeCodeView lineMetadata={lineMetadata} range={editingRange} rangeMountRef={rangeMountRef} />
           ) : (
             <ReadOnlyCodeView lineMetadata={lineMetadata} />
           )}
         </div>
 
-        {/* diff panel */}
         {showDiff && (
           <div style={{
             flex: '0 0 30%', overflow: 'auto', padding: 8,
@@ -294,18 +362,42 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
         )}
       </div>
 
+      {/* command bar */}
+      <div style={{
+        borderTop: '0.5px solid var(--border)', display: 'flex', alignItems: 'center',
+        background: 'var(--bg-secondary)', flexShrink: 0,
+      }}>
+        <span style={{ padding: '0 0 0 12px', color: searchMode ? '#ff9800' : 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>
+          {searchMode ? '?' : '>'}
+        </span>
+        <input
+          ref={cmdInputRef}
+          type="text"
+          value={cmdInput}
+          onChange={e => setCmdInput(e.target.value)}
+          onKeyDown={handleCmdKey}
+          placeholder={searchMode
+            ? 'Type search query...'
+            : editingRange ? '<< to commit · >> or Esc to cancel'
+            : 'find, next, prev, or line range e.g. 10 or 10 20'}
+          style={{
+            flex: 1, border: 'none', outline: 'none', padding: '10px 12px',
+            background: 'transparent', color: 'var(--text-primary)',
+            fontFamily: 'var(--font-mono)', fontSize: 13,
+          }}
+          spellCheck={false}
+        />
+      </div>
     </div>
   );
 }
 
-/* ─── Read-only code view (line metadata aware) ─── */
+/* ─── Read-only code view ─── */
 
 function ReadOnlyCodeView({ lineMetadata }: { lineMetadata: LineState[] }) {
   return (
     <div style={{ padding: '8px 0' }}>
-      {lineMetadata.map(ls => (
-        <LineRow key={ls.lineNumber} state={ls} />
-      ))}
+      {lineMetadata.map(ls => <LineRow key={ls.lineNumber} state={ls} />)}
     </div>
   );
 }
@@ -341,13 +433,19 @@ function RangeCodeView({ lineMetadata, range, rangeMountRef }: {
   );
 }
 
-/* ─── Single line row with gutter indicator ─── */
+/* ─── Single line row with gutter indicator + search highlights ─── */
 
 function LineRow({ state }: { state: LineState }) {
   let gutterColor = 'transparent';
   let background = 'transparent';
 
-  if (state.isModified) {
+  if (state.isActiveSearchMatch) {
+    gutterColor = '#2196f3';
+    background = 'rgba(33, 150, 243, 0.08)';
+  } else if (state.isSearchMatch) {
+    gutterColor = '#2196f3';
+    background = 'rgba(33, 150, 243, 0.04)';
+  } else if (state.isModified) {
     gutterColor = '#ff9800';
     background = 'rgba(255, 152, 0, 0.04)';
   } else if (state.isInserted) {
@@ -363,7 +461,7 @@ function LineRow({ state }: { state: LineState }) {
       <div style={{ width: 3, flexShrink: 0, background: gutterColor }} />
       <span style={{
         display: 'inline-block', width: 45, textAlign: 'right', paddingRight: 12,
-        color: state.isActiveRange ? '#ff9800' : 'var(--text-muted)',
+        color: state.isActiveSearchMatch ? '#2196f3' : state.isActiveRange ? '#ff9800' : 'var(--text-muted)',
         userSelect: 'none', fontSize: 11, lineHeight: '20px', flexShrink: 0,
       }}>
         {state.lineNumber}
@@ -372,7 +470,7 @@ function LineRow({ state }: { state: LineState }) {
         whiteSpace: 'pre', fontFamily: 'var(--font-mono)', fontSize: 13,
         lineHeight: '20px', color: 'var(--text-primary)',
       }}>
-        {state.content || ' '}
+        {state.isActiveSearchMatch ? `${state.content}  ←` : (state.content || ' ')}
       </span>
     </div>
   );

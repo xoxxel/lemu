@@ -148,6 +148,48 @@ export const diffToggleAction: PluginAction = {
   },
 };
 
+export const findAction: PluginAction = {
+  id: 'find',
+  type: 'edit-workflow',
+  title: 'Find in document',
+  description: 'Search for text in the current document',
+  handler: async (ctx) => {
+    const appCtx = getRuntime().getContext();
+    const query = ctx.query.replace('find', '').trim();
+    if (query) {
+      appCtx.set('edit:search:execute', query);
+      return `Searching for "${query}"`;
+    }
+    appCtx.set('edit:search:mode', true);
+    appCtx.set('edit:search:modeMsg', 'Enter search query in the editor bar');
+    return 'Enter search query...';
+  },
+};
+
+export const nextAction: PluginAction = {
+  id: 'next',
+  type: 'edit-workflow',
+  title: 'Next match',
+  description: 'Move to the next search match',
+  handler: async () => {
+    const appCtx = getRuntime().getContext();
+    appCtx.set('edit:search:navigate', 'next');
+    return 'Next match';
+  },
+};
+
+export const prevAction: PluginAction = {
+  id: 'prev',
+  type: 'edit-workflow',
+  title: 'Previous match',
+  description: 'Move to the previous search match',
+  handler: async () => {
+    const appCtx = getRuntime().getContext();
+    appCtx.set('edit:search:navigate', 'prev');
+    return 'Previous match';
+  },
+};
+
 export const editWorkflowActions: PluginAction[] = [
   focusAction,
   proposeAction,
@@ -155,4 +197,7 @@ export const editWorkflowActions: PluginAction[] = [
   rejectAction,
   revertAction,
   diffToggleAction,
+  findAction,
+  nextAction,
+  prevAction,
 ];
