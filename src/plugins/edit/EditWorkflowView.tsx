@@ -31,12 +31,9 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
   const [renderTick, setRenderTick] = useState(0);
   const [statusMsg, setStatusMsg] = useState('');
   const [showDiff, setShowDiff] = useState(() => appCtx.get<boolean>('edit:diffVisible') ?? true);
-  const [cmdInput, setCmdInput] = useState('');
   const [editingRange, setEditingRange] = useState<Range | null>(session.activeRange);
-  const [searchMode, setSearchMode] = useState(false);
   const codeScrollRef = useRef<HTMLDivElement>(null);
   const rangeMountRef = useRef<HTMLDivElement>(null) as React.RefObject<HTMLDivElement>;
-  const cmdInputRef = useRef<HTMLInputElement>(null);
 
   const rerender = useCallback(() => setRenderTick(t => t + 1), []);
 
@@ -103,10 +100,7 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
     return appCtx.onChange('edit:diffVisible', (_k, v) => { setShowDiff(v !== false); });
   }, []);
 
-  /* ── focus cmd input when search mode activated ── */
-  useEffect(() => {
-    if (searchMode && cmdInputRef.current) cmdInputRef.current.focus();
-  }, [searchMode]);
+  /* no internal command input — main app input drives commands/search */
 
   /* ── scroll helper ── */
   const scrollToLine = useCallback((line: number) => {
@@ -126,92 +120,16 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
         rerender();
       }),
       appCtx.onChange('edit:search:execute', (_k, v) => {
-        if (typeof v === 'string') { session.find(v); setSearchMode(false); rerender(); }
+        if (typeof v === 'string') { session.find(v); rerender(); }
       }),
       appCtx.onChange('edit:search:mode', (_k, v) => {
-        setSearchMode(v === true);
         if (v === true) rerender();
       }),
     ];
     return () => us.forEach(u => u());
   }, [scrollToLine]);
 
-  /* ── search execution from internal bar ── */
-  const executeSearch = useCallback((query: string) => {
-    session.find(query);
-    setSearchMode(false);
-    appCtx.set('edit:search:mode', false);
-    const ss = session.searchSession;
-    if (ss.totalMatches > 0) {
-      setStatusMsg(`${ss.totalMatches} match(es) for "${query}"`);
-      scrollToLine(ss.matches[0].line);
-    } else {
-      setStatusMsg(`No matches for "${query}"`);
-    }
-    rerender();
-  }, [session, scrollToLine, rerender]);
-
-  /* ── cmd input handlers ── */
-  const handleCmdSubmit = useCallback(() => {
-    const trimmed = cmdInput.trim();
-    setCmdInput('');
-    if (!trimmed) return;
-
-    if (searchMode) { executeSearch(trimmed); return; }
-
-    if (editingRange && (trimmed === '<<' || trimmed === '>>')) {
-      if (trimmed === '<<') {
-        const op = session.commitRange();
-        setStatusMsg(op ? 'Edit committed.' : 'No changes to commit.');
-      } else { session.cancelRange(); setStatusMsg('Cancelled.'); }
-      setEditingRange(null); rerender();
-      return;
-    }
-
-    if (trimmed === 'find') { setSearchMode(true); setStatusMsg('Type search query...'); return; }
-
-    if (trimmed === 'next' && session.searchSession.totalMatches > 0) {
-      session.nextMatch();
-      const m = session.searchSession.matches[session.searchSession.matchIndex];
-      if (m) scrollToLine(m.line);
-      setStatusMsg(`Match ${session.searchSession.matchIndex + 1} of ${session.searchSession.totalMatches}`);
-      rerender(); return;
-    }
-
-    if (trimmed === 'prev' && session.searchSession.totalMatches > 0) {
-      session.prevMatch();
-      const m = session.searchSession.matches[session.searchSession.matchIndex];
-      if (m) scrollToLine(m.line);
-      setStatusMsg(`Match ${session.searchSession.matchIndex + 1} of ${session.searchSession.totalMatches}`);
-      rerender(); return;
-    }
-
-    const parsed = parseRangeInput(trimmed);
-    if (parsed) {
-      const clamped = clampRange(parsed, session.lineCount);
-      session.setActiveRange(clamped);
-      setEditingRange(clamped);
-      scrollToLine(clamped.start);
-      setStatusMsg(`Editing lines ${clamped.start}-${clamped.end}`);
-      rerender(); return;
-    }
-
-    setStatusMsg(`Unknown: "${trimmed}"`);
-  }, [cmdInput, session, editingRange, searchMode, scrollToLine, executeSearch, rerender]);
-
-  const handleCmdKey = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleCmdSubmit();
-    else if (e.key === 'Escape') {
-      if (searchMode) {
-        setSearchMode(false);
-        appCtx.set('edit:search:mode', false);
-        setStatusMsg(''); rerender();
-      } else if (editingRange) {
-        session.cancelRange(); setEditingRange(null);
-        setStatusMsg('Cancelled.'); rerender();
-      }
-    }
-  }, [handleCmdSubmit, editingRange, searchMode, session, rerender]);
+  /* command handling moved to main app input via App.tsx; no internal input here */
 
   /* ── workflow handlers ── */
   const handlePropose = async () => {
@@ -362,32 +280,6 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
         )}
       </div>
 
-      {/* command bar */}
-      <div style={{
-        borderTop: '0.5px solid var(--border)', display: 'flex', alignItems: 'center',
-        background: 'var(--bg-secondary)', flexShrink: 0,
-      }}>
-        <span style={{ padding: '0 0 0 12px', color: searchMode ? '#ff9800' : 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>
-          {searchMode ? '?' : '>'}
-        </span>
-        <input
-          ref={cmdInputRef}
-          type="text"
-          value={cmdInput}
-          onChange={e => setCmdInput(e.target.value)}
-          onKeyDown={handleCmdKey}
-          placeholder={searchMode
-            ? 'Type search query...'
-            : editingRange ? '<< to commit · >> or Esc to cancel'
-            : 'find, next, prev, or line range e.g. 10 or 10 20'}
-          style={{
-            flex: 1, border: 'none', outline: 'none', padding: '10px 12px',
-            background: 'transparent', color: 'var(--text-primary)',
-            fontFamily: 'var(--font-mono)', fontSize: 13,
-          }}
-          spellCheck={false}
-        />
-      </div>
     </div>
   );
 }
