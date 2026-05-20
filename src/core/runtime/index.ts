@@ -23,6 +23,8 @@ import { grammarRegistry, suggestionEngine } from '../grammar';
 import type { GrammarContext, GrammarSuggestion } from '../grammar';
 import { registry as cmdRegistry } from '../commands/registry';
 import { OwnershipManager, type OwnershipState } from '../ownership';
+import { OperationRegistry, TransactionPipeline, replaceHandler, insertHandler, deleteHandler } from '../operations';
+import type { OperationResult, PipelineContext, Operation } from '../operations';
 
 const appWrappers: unknown[] = [];
 
@@ -175,6 +177,13 @@ export interface Runtime {
     hasOwner(): boolean;
     releaseOnRootTrigger(): void;
   };
+  operations: {
+    registry: OperationRegistry;
+    pipeline: TransactionPipeline;
+    run(op: Operation, ctx: PipelineContext): Promise<OperationResult>;
+  };
+  /** Set by App.tsx — provides the active editor tab's state for commands */
+  editorContext: PipelineContext;
 }
 
 // ---------------------------------------------------------------------------
@@ -360,6 +369,12 @@ export async function createRuntime(): Promise<Runtime> {
     feedbackService.show(payload as FeedbackEvent);
   });
   const ownershipManager = new OwnershipManager();
+  const operationRegistry = new OperationRegistry();
+  operationRegistry.register(replaceHandler);
+  operationRegistry.register(insertHandler);
+  operationRegistry.register(deleteHandler);
+  const operationPipeline = new TransactionPipeline(operationRegistry);
+  const editorContext: PipelineContext = { document: '', path: '', state: {} };
   const pluginContext = createPluginContext(actionRegistry, viewComponentMap, viewMetaMap);
   const pluginLoader = new PluginLoader(pluginRegistry, pluginContext);
 
@@ -573,6 +588,14 @@ export async function createRuntime(): Promise<Runtime> {
       hasOwner: () => ownershipManager.hasOwner(),
       releaseOnRootTrigger: () => ownershipManager.releaseOnRootTrigger(),
     },
+    operations: {
+      registry: operationRegistry,
+      pipeline: operationPipeline,
+      async run(op: Operation, ctx: PipelineContext): Promise<OperationResult> {
+        return operationPipeline.run(op, ctx);
+      },
+    },
+    editorContext,
 
     async init(plugins) {
       registerRuntimeSettings();

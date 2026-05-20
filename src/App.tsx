@@ -127,6 +127,17 @@ export default function App() {
   const { add: addHistory, up: historyUp, down: historyDown, reset: resetHistory, isNavigating } = useCommandHistory();
   const activeTab = tabs.find((t) => t.id === activeTabId) || null;
   const activeTabType = tabs.find((t) => t.id === activeTabId)?.type ?? null;
+  const prevEditorCtx = useRef<string>('');
+  if (activeTab?.type === 'editor') {
+    const s = activeTab.state as Record<string, unknown>;
+    const doc = (s.content as string) || '';
+    if (prevEditorCtx.current !== doc) {
+      prevEditorCtx.current = doc;
+      getRuntime().editorContext.document = doc;
+      getRuntime().editorContext.path = (s.path as string) || '';
+      getRuntime().editorContext.state = s;
+    }
+  }
   const activePlugin = activeTabType ? getRuntime().pluginRegistry.getPluginByTabType(activeTabType) : null;
   const { scope: activeScope } = resolveScope(inputValue, activePlugin);
   const { suggestions, selectedIndex, statusText, update: updateAutocomplete, clear: clearAutocomplete, selectNext, selectPrev, selectCurrent } = useAutocomplete(activeScope, activePlugin);
