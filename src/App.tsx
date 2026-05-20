@@ -287,12 +287,37 @@ export default function App() {
     const runtime = getRuntime();
     const trimmed = input.trim();
 
-    /* ── Root trigger detection — ownership released on any root prefix ── */
-    const isRootTrigger = trimmed.startsWith('/') || trimmed.startsWith(':') || trimmed.startsWith('@') || trimmed.startsWith('>') || trimmed.startsWith('*>');
-    if (isRootTrigger) {
-      if (runtime.ownership.hasOwner()) {
-        runtime.ownership.releaseOnRootTrigger();
+    /* ── Ownership gate: root/system prefixes ALWAYS bypass ownership ── */
+    const hasRootPrefix = trimmed.startsWith('/') || trimmed.startsWith(':') || trimmed.startsWith('@');
+    const hasActionPrefix = trimmed.startsWith('>') || trimmed.startsWith('*>');
+
+    if (hasRootPrefix) {
+      /* / : @ — release ownership and route normally */
+      if (runtime.ownership.hasOwner()) runtime.ownership.releaseOnRootTrigger();
+    } else if (hasActionPrefix) {
+      /* > *> — bypass ownership but DO NOT release (action handlers may toggle) */
+    } else if (runtime.ownership.hasOwner()) {
+      /* Plain text while owned — route directly to the owning plugin */
+      const owner = runtime.ownership.getOwner()!;
+      const plugin = runtime.pluginRegistry.get(owner.pluginId);
+      if (plugin?.onInput) {
+        addMessage('user', trimmed);
+        const tab = tabs.find(t => t.id === owner.tabId);
+        const result: PluginInputResult | void = await runtime.processPluginInput({
+          input: trimmed,
+          tabId: owner.tabId ?? '',
+          tabType: owner.tabType,
+          state: tab?.state ?? {},
+        });
+        if (result?.state) {
+          setTabs((prev) => prev.map((t) =>
+            t.id === owner.tabId ? { ...t, state: { ...t.state, ...result.state } } : t
+          ));
+        }
+        return;
       }
+      /* Owner plugin gone — clean up and fall through */
+      runtime.ownership.release();
     }
 
     const classified = grammarClassify(input);
@@ -429,6 +454,11 @@ export default function App() {
         unpin: () => tab && togglePinTab(tab.id),
         addTab: (type: string, title: string, state?: Record<string, unknown>) =>
           addTab(type, title, undefined, state),
+        setState: (patch: Record<string, unknown>) => {
+          if (tab) setTabs(prev => prev.map(t =>
+            t.id === tab.id ? { ...t, state: { ...t.state, ...patch } } : t
+          ));
+        },
       };
       try {
         const result = await action.handler(ctx);
@@ -436,6 +466,10 @@ export default function App() {
         /* ── Ownership acquisition: action claims subsequent plain text ── */
         if (action.ownsInput && tab) {
           runtime.ownership.acquire(activePlugin?.id ?? '', action.id, tab.type, tab.id);
+          const searchMode = getRuntime().getContext().get<boolean>('edit:search:mode');
+          if (action.id === 'find' && searchMode === false) {
+            runtime.ownership.release();
+          }
         }
       } catch (err) {
         const msg = `Action error: ${err instanceof Error ? err.message : String(err)}`;
@@ -527,32 +561,6 @@ export default function App() {
     }
 
     if (mode === 'tab') {
-      /* ── Ownership: owned plain text routes to the owning plugin ── */
-      if (runtime.ownership.hasOwner()) {
-        const owner = runtime.ownership.getOwner()!;
-        const plugin = runtime.pluginRegistry.get(owner.pluginId);
-        if (plugin) {
-          addMessage('user', raw);
-          const result: PluginInputResult | void = await runtime.processPluginInput({
-            input: routedInput,
-            tabId: owner.tabId ?? '',
-            tabType: owner.tabType,
-            state: {},
-          });
-          if (result) {
-            if (result.message) addMessage('system', result.message);
-            if (result.state) {
-              setTabs((prev) => prev.map((t) =>
-                t.id === owner.tabId ? { ...t, state: { ...t.state, ...result.state } } : t
-              ));
-            }
-          }
-          return;
-        }
-        /* fall through if the owning plugin is gone */
-        runtime.ownership.release();
-      }
-
       if (!activeTab) {
         addMessage('user', raw);
         addMessage('error', 'No active tab. Open a file or view first, or use : for terminal, / for commands, @ for help.');
@@ -567,7 +575,7 @@ export default function App() {
       await handleTabInput(routedInput, activeTab);
       return;
     }
-  }, [addHistory, addMessage, clearAutocomplete, terminal, handleShellCommand, addTab, activeTab, pinnedTabs, togglePinTab, handleTerminalCommand, handleTabInput]);
+  }, [addHistory, addMessage, clearAutocomplete, terminal, handleShellCommand, addTab, activeTab, pinnedTabs, togglePinTab, handleTerminalCommand, handleTabInput, tabs]);
 
   const dismissFeedback = useCallback(() => {
     getRuntime().feedback.clear();
@@ -647,6 +655,17 @@ export default function App() {
       return;
     }
 
+    if (e.key === 'Enter' && e.shiftKey) {
+      e.preventDefault();
+      /* Shift+Enter in find mode = previous match */
+      if (getRuntime().ownership.hasOwner() && getRuntime().ownership.getOwner()?.pluginId === 'fs') {
+        handleSubmit('k');
+      } else {
+        handleSubmit(inputValue);
+      }
+      return;
+    }
+
     if (e.key === 'Enter') {
       e.preventDefault();
       handleSubmit(inputValue);
@@ -721,7 +740,15 @@ export default function App() {
           selectedIndex={selectedIndex}
           hint={statusText}
           mode={inputMode}
-          customPlaceholder={getScopePlaceholder(activeScope, activePlugin)}
+          customPlaceholder={(() => {
+            const owner = getRuntime().ownership.getOwner();
+            if (owner && owner.pluginId === 'fs') {
+              return inputValue.startsWith('>') || inputValue.startsWith('*>')
+                ? 'choose action — or j/k to navigate matches'
+                : 'Find text in document...';
+            }
+            return getScopePlaceholder(activeScope, activePlugin);
+          })()}
           onSuggestionClick={(idx) => {
             const selected = suggestions[idx];
             if (selected) {

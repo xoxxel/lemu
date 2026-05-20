@@ -261,6 +261,12 @@ export class CMEditorSession {
     }
   }
 
+  clearSearch(): void {
+    this._searchQuery = '';
+    this._searchMatches = [];
+    this._searchMatchIndex = -1;
+  }
+
   nextMatch(): void {
     if (this._searchMatches.length === 0) return;
     this._searchMatchIndex = (this._searchMatchIndex + 1) % this._searchMatches.length;

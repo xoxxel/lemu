@@ -153,16 +153,28 @@ export const findAction: PluginAction = {
   type: 'edit-workflow',
   title: 'Find in document',
   description: 'Search for text in the current document',
+  ownsInput: true,
   handler: async (ctx) => {
     const appCtx = getRuntime().getContext();
-    const query = ctx.query.replace('find', '').trim();
+    const query = ctx.query.replace(/^find\s*/, '').trim();
+    const current = appCtx.get<boolean>('edit:search:mode') ?? false;
+
     if (query) {
+      appCtx.set('edit:search:mode', true);
+      appCtx.set('action:suffix:find', '[on]');
       appCtx.set('edit:search:execute', query);
       return `Searching for "${query}"`;
     }
-    appCtx.set('edit:search:mode', true);
-    appCtx.set('edit:search:modeMsg', 'Enter search query in the editor bar');
-    return 'Enter search query...';
+
+    const next = !current;
+    appCtx.set('edit:search:mode', next);
+    appCtx.set('action:suffix:find', next ? '[on]' : '[off]');
+
+    if (!next) {
+      getRuntime().ownership.release();
+    }
+
+    return `Search ${next ? 'enabled' : 'disabled'}`;
   },
 };
 

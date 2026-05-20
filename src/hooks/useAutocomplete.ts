@@ -21,7 +21,11 @@ export function useAutocomplete(scope: CommandScope, activePlugin: { id: string;
     /* ── Ownership context: show owner info in status ── */
     if (runtime.ownership.hasOwner()) {
       const owner = runtime.ownership.getOwner()!;
-      setStatusText(`owned by "${owner.pluginId}" (type /, :, @, >, *> for root triggers)`);
+      if (owner.pluginId === 'fs' && owner.actionId === 'find') {
+        setStatusText('find [on] — type text to search, j/k next/prev, Enter next, Shift+Enter prev');
+      } else {
+        setStatusText(`owned by "${owner.pluginId}" (type /, :, @, >, *> for root triggers)`);
+      }
     } else {
       setStatusText(null);
     }

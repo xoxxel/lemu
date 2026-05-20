@@ -95,6 +95,12 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
   useEffect(() => {
     appCtx.set('edit:diffVisible', showDiff);
     appCtx.set('action:suffix:diff', showDiff ? '[on]' : '[off]');
+    if (appCtx.get<string>('action:suffix:find') === undefined) {
+      appCtx.set('action:suffix:find', '[off]');
+    }
+    if (appCtx.get<boolean>('edit:search:mode') === undefined) {
+      appCtx.set('edit:search:mode', false);
+    }
   }, []);
   useEffect(() => {
     return appCtx.onChange('edit:diffVisible', (_k, v) => { setShowDiff(v !== false); });
@@ -123,7 +129,12 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
         if (typeof v === 'string') { session.find(v); rerender(); }
       }),
       appCtx.onChange('edit:search:mode', (_k, v) => {
-        if (v === true) rerender();
+        if (v === true) {
+          rerender();
+          return;
+        }
+        session.clearSearch();
+        rerender();
       }),
     ];
     return () => us.forEach(u => u());

@@ -7,6 +7,8 @@ export interface ActionContext {
   pin: () => void
   unpin: () => void
   addTab?: (type: string, title: string, state?: Record<string, unknown>) => string | undefined
+  /** Update the active tab's state (merged shallowly). */
+  setState?: (patch: Record<string, unknown>) => void
 }
 
 export interface PluginAction {

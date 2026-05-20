@@ -1,4 +1,4 @@
-import type { Plugin, CommandExecutedPayload } from '../../core/plugin-system/types';
+import type { Plugin, CommandExecutedPayload, PluginInputPayload, PluginInputResult } from '../../core/plugin-system/types';
 import { standardActions } from '../../core/actions';
 import { eventBus, DomainEventTypes } from '../../core/events';
 import openCommand from './open';
@@ -8,6 +8,7 @@ import deleteCommand from './delete';
 import { EditorView } from './EditorView';
 import { fsManifest } from './manifest';
 import { fsDefaultSettings, fsSettingsSchema } from './settings';
+import { findAction, findAllMatches } from './find';
 
 export const fsPlugin: Plugin = {
   id: 'fs',
@@ -15,7 +16,7 @@ export const fsPlugin: Plugin = {
   version: '0.1.0',
   description: 'File and directory operations (open, copy, move, delete)',
   commands: [openCommand, copyCommand, moveCommand, deleteCommand],
-  actions: standardActions,
+  actions: [...standardActions, findAction],
   views: [
     {
       type: 'editor',
@@ -26,6 +27,48 @@ export const fsPlugin: Plugin = {
   manifest: fsManifest,
   settings: fsDefaultSettings,
   settingsSchema: fsSettingsSchema,
+  interaction: {
+    primaryInput: {
+      enabled: true,
+      grammar: '<query> | j | k',
+      examples: ['find text', 'j', 'k'],
+    },
+    placeholders: {
+      defaultPlaceholder: 'Type >find to search in document',
+      primaryPlaceholder: 'enter search text, or j/k to navigate matches',
+    },
+  },
+  async onInput(payload: PluginInputPayload): Promise<PluginInputResult | void> {
+    const raw = payload.input.trim();
+    const state = payload.state as Record<string, unknown>;
+    const findMode = !!state.findMode;
+    if (!findMode) return;
+    const content = state.content as string || '';
+
+    const prevQuery = (state.findQuery as string) || '';
+    const prevIndex = (state.findIndex as number) || 0;
+    const allMatches = content ? findAllMatches(content, prevQuery || raw) : [];
+
+    /* ── Navigation: single j/k, or empty Enter ── */
+    const isNav = (raw.toLowerCase() === 'j' && prevQuery) ||
+                  (raw.toLowerCase() === 'k' && prevQuery) ||
+                  (!raw && allMatches.length > 0);
+
+    if (isNav) {
+      const dir = raw.toLowerCase() === 'k' ? -1 : 1;
+      const next = ((prevIndex + dir) % allMatches.length + allMatches.length) % allMatches.length;
+      return {
+        state: { findIndex: next, findCount: allMatches.length },
+      };
+    }
+
+    /* ── New search query ── */
+    const query = raw;
+    const matches = content ? findAllMatches(content, query) : [];
+    return {
+      state: { findQuery: query, findIndex: matches.length > 0 ? 0 : -1, findCount: matches.length },
+    };
+  },
   docs: {
     overview: 'The Filesystem plugin provides basic file and directory operations. All operations go through the server REST API and are validated against path traversal attacks.',
     examples: '  /open package.json\n  /copy file.ts file.backup.ts\n  /move old.ts new.ts\n  /delete -f temp.log',
