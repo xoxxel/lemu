@@ -284,6 +284,17 @@ export default function App() {
   }, [addMessage, addTab]);
 
   const handleSubmit = useCallback(async (input: string) => {
+    const runtime = getRuntime();
+    const trimmed = input.trim();
+
+    /* ── Root trigger detection — ownership released on any root prefix ── */
+    const isRootTrigger = trimmed.startsWith('/') || trimmed.startsWith(':') || trimmed.startsWith('@') || trimmed.startsWith('>') || trimmed.startsWith('*>');
+    if (isRootTrigger) {
+      if (runtime.ownership.hasOwner()) {
+        runtime.ownership.releaseOnRootTrigger();
+      }
+    }
+
     const classified = grammarClassify(input);
     const { mode, input: routedInput, raw, node } = classified;
     if (!routedInput && mode !== 'tab' && !node) return;
@@ -422,6 +433,10 @@ export default function App() {
       try {
         const result = await action.handler(ctx);
         addMessage('system', result);
+        /* ── Ownership acquisition: action claims subsequent plain text ── */
+        if (action.ownsInput && tab) {
+          runtime.ownership.acquire(activePlugin?.id ?? '', action.id, tab.type, tab.id);
+        }
       } catch (err) {
         const msg = `Action error: ${err instanceof Error ? err.message : String(err)}`;
         addMessage('error', msg);
@@ -512,6 +527,32 @@ export default function App() {
     }
 
     if (mode === 'tab') {
+      /* ── Ownership: owned plain text routes to the owning plugin ── */
+      if (runtime.ownership.hasOwner()) {
+        const owner = runtime.ownership.getOwner()!;
+        const plugin = runtime.pluginRegistry.get(owner.pluginId);
+        if (plugin) {
+          addMessage('user', raw);
+          const result: PluginInputResult | void = await runtime.processPluginInput({
+            input: routedInput,
+            tabId: owner.tabId ?? '',
+            tabType: owner.tabType,
+            state: {},
+          });
+          if (result) {
+            if (result.message) addMessage('system', result.message);
+            if (result.state) {
+              setTabs((prev) => prev.map((t) =>
+                t.id === owner.tabId ? { ...t, state: { ...t.state, ...result.state } } : t
+              ));
+            }
+          }
+          return;
+        }
+        /* fall through if the owning plugin is gone */
+        runtime.ownership.release();
+      }
+
       if (!activeTab) {
         addMessage('user', raw);
         addMessage('error', 'No active tab. Open a file or view first, or use : for terminal, / for commands, @ for help.');
@@ -538,7 +579,10 @@ export default function App() {
     if (getRuntime().feedback.currentFeedback) {
       getRuntime().feedback.clear();
     }
-    if (value.startsWith('/') || value.startsWith('>') || value.startsWith('*>') || value.startsWith('@')) {
+    if (value.startsWith('/') || value.startsWith('>') || value.startsWith('*>') || value.startsWith(':') || value.startsWith('@')) {
+      updateAutocomplete(value);
+    } else if (getRuntime().ownership.hasOwner()) {
+      /* Ownership mode: still show autocomplete for prefix triggers */
       updateAutocomplete(value);
     } else {
       clearAutocomplete();

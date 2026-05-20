@@ -18,6 +18,14 @@ export function useAutocomplete(scope: CommandScope, activePlugin: { id: string;
   const update = useCallback(async (input: string) => {
     const runtime = getRuntime();
 
+    /* ── Ownership context: show owner info in status ── */
+    if (runtime.ownership.hasOwner()) {
+      const owner = runtime.ownership.getOwner()!;
+      setStatusText(`owned by "${owner.pluginId}" (type /, :, @, >, *> for root triggers)`);
+    } else {
+      setStatusText(null);
+    }
+
     /* ── Action scope: ONLY plugin actions, by prefix, no mixing ── */
     if (input.startsWith('*>')) {
       const query = input.replace(/^\*>/, '').trim();

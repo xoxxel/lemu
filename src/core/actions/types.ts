@@ -16,5 +16,8 @@ export interface PluginAction {
   aliases?: string[]
   /** Optional view-type restriction; '*' or omitted means all types */
   type?: string
+  /** Ownership action: takes ownership of subsequent plain-text input.
+   *  Root prefixes (/, :, @, >, *>) are NOT owned and always resolve normally. */
+  ownsInput?: boolean
   handler: (ctx: ActionContext) => string | Promise<string>
 }

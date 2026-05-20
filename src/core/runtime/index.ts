@@ -22,6 +22,7 @@ import { registerRuntimeSettings, settingsRegistry } from '../settings';
 import { grammarRegistry, suggestionEngine } from '../grammar';
 import type { GrammarContext, GrammarSuggestion } from '../grammar';
 import { registry as cmdRegistry } from '../commands/registry';
+import { OwnershipManager, type OwnershipState } from '../ownership';
 
 const appWrappers: unknown[] = [];
 
@@ -165,6 +166,14 @@ export interface Runtime {
       pin: () => void;
       unpin: () => void;
     }): Promise<import('../grammar/types').ExecuteResult>;
+  };
+  ownership: {
+    acquire(pluginId: string, actionId: string, tabType: string, tabId: string | null): boolean;
+    release(pluginId?: string): boolean;
+    getOwner(): OwnershipState | null;
+    isOwnedBy(pluginId: string): boolean;
+    hasOwner(): boolean;
+    releaseOnRootTrigger(): void;
   };
 }
 
@@ -350,6 +359,7 @@ export async function createRuntime(): Promise<Runtime> {
   eventBus.on('feedback', (payload) => {
     feedbackService.show(payload as FeedbackEvent);
   });
+  const ownershipManager = new OwnershipManager();
   const pluginContext = createPluginContext(actionRegistry, viewComponentMap, viewMetaMap);
   const pluginLoader = new PluginLoader(pluginRegistry, pluginContext);
 
@@ -554,6 +564,14 @@ export async function createRuntime(): Promise<Runtime> {
       async execute(input: string, context: GrammarContext, deps) {
         return grammarRegistry.execute(input, context, deps);
       },
+    },
+    ownership: {
+      acquire: (pluginId, actionId, tabType, tabId) => ownershipManager.acquire(pluginId, actionId, tabType, tabId),
+      release: (pluginId) => ownershipManager.release(pluginId),
+      getOwner: () => ownershipManager.getOwner(),
+      isOwnedBy: (pluginId) => ownershipManager.isOwnedBy(pluginId),
+      hasOwner: () => ownershipManager.hasOwner(),
+      releaseOnRootTrigger: () => ownershipManager.releaseOnRootTrigger(),
     },
 
     async init(plugins) {
