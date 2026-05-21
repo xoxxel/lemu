@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useSyncExternalStore } from 'react';
 import { parse } from './core/parser';
 import { classifyInput } from './core/input-router';
 import { getRuntime } from './core/runtime/instance';
@@ -18,6 +18,7 @@ import { createTabId } from './core/tabs/types';
 import type { FeedbackEvent } from './core/feedback/types';
 import Sidebar from './components/Sidebar';
 import Workspace from './components/Workspace';
+import { AiPanel } from './components/AiPanel';
 import InputBar from './components/InputBar';
 import type { InputMode } from './components/InputBar';
 import FeedbackBar from './components/FeedbackBar';
@@ -141,6 +142,16 @@ export default function App() {
   const activePlugin = activeTabType ? getRuntime().pluginRegistry.getPluginByTabType(activeTabType) : null;
   const { scope: activeScope } = resolveScope(inputValue, activePlugin);
   const { suggestions, selectedIndex, statusText, update: updateAutocomplete, clear: clearAutocomplete, selectNext, selectPrev, selectCurrent } = useAutocomplete(activeScope, activePlugin);
+
+  /* ── AI Panel visibility ── */
+  const [aiPanelOpen, setAiPanelOpen] = useState(() => getRuntime().aiSessions.hasActiveSession);
+  const _aiSessionTick = useSyncExternalStore(
+    (cb) => { const id = setInterval(cb, 200); return () => clearInterval(id); },
+    () => getRuntime().aiSessions.hasActiveSession ? 1 : 0,
+  );
+  if (!aiPanelOpen && getRuntime().aiSessions.hasActiveSession) {
+    setAiPanelOpen(true);
+  }
   const terminal = useTerminal();
 
   const addMessage = useCallback((type: Message['type'], content: string) => {
@@ -542,6 +553,12 @@ export default function App() {
       if (result.success && result.data && typeof result.data === 'object') {
         const d = result.data as Record<string, unknown>;
         const dType = d.type as string | undefined;
+
+        /* ── Open AI panel when /coder returns session data ── */
+        if (d.aiContext && typeof d.aiContext === 'object') {
+          setAiPanelOpen(true);
+        }
+
         if (dType && getRuntime().viewComponentMap[dType]) {
           if (activeTab && activeTab.type === dType) {
             setTabs((prev) => prev.map((t) =>
@@ -712,10 +729,13 @@ export default function App() {
             onClose={closeTab}
           />
         )}
-        <Workspace
-          ref={workspaceRef}
-          activeTab={activeTab}
-        />
+        <div className="editor-area">
+          <Workspace
+            ref={workspaceRef}
+            activeTab={activeTab}
+          />
+          {aiPanelOpen && <AiPanel state={{}} />}
+        </div>
         {terminal.sessions.length > 0 && (
           <div className={`terminal-panel ${terminalPanelOpen ? '' : 'collapsed'}`}>
             <div className="terminal-panel-header">

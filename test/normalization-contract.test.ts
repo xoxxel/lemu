@@ -28,7 +28,7 @@ async function testPatchesFormatRequiresPatches() {
 }
 
 async function testUnsupportedFormatRejected() {
-  const supportedFormats = ['fullFile', 'unifiedDiff', 'searchReplace', 'patches'];
+  const supportedFormats = ['fullFile', 'unified', 'searchReplace', 'patches'];
   const invalidFormats = ['raw', '', 'diff', 'auto'];
 
   for (const fmt of invalidFormats) {

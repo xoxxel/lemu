@@ -226,6 +226,18 @@ export async function runAider(req: AiderRequest): Promise<AiderResult> {
       };
     }
 
+    /* ── Single-file audit: verify only the expected file was modified ── */
+    const tmpFiles = await fs.readdir(tmpDir);
+    const unexpectedFiles = tmpFiles.filter(f => f !== fileName && f !== '.aider');
+    if (unexpectedFiles.length > 0) {
+      return {
+        success: false,
+        patches: [],
+        error: `Aider created/modified unexpected file(s): ${unexpectedFiles.join(', ')}. Only single-file edits are allowed.`,
+        metadata: { model, providerId: req.providerId || 'openai', rejectedMutation: 'multi-file' },
+      };
+    }
+
     const modified = await fs.readFile(tmpFile, 'utf-8');
     const patches = computePatchesFromDiff(req.currentContent, modified);
 

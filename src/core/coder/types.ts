@@ -1,6 +1,6 @@
 import type { Patch } from '../operations/types';
 
-export type OutputFormat = 'fullFile' | 'unifiedDiff' | 'searchReplace' | 'patches';
+export type OutputFormat = 'fullFile' | 'unified' | 'searchReplace' | 'patches';
 
 export interface CodingTask {
   filePath: string;

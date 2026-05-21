@@ -1,6 +1,8 @@
 import type { Command, AutocompleteItem } from '../../core/commands/types';
 import { getRuntime } from '../../core/runtime/instance';
 import { PatchNormalizer } from '../../core/coder/patch-normalizer';
+import { AISession, createAiGeneratedPatch } from '../../core/coder/session';
+import { eventBus } from '../../core/events';
 
 const api = {
   async readFile(path: string): Promise<string> {
@@ -167,6 +169,35 @@ const coderCommand: Command = {
         return { success: false, message: 'Engine returned no changes. Try a more specific request.' };
       }
 
+      /* ── Create AISession with patch dependency inference ── */
+      const patchesWithDeps = result.patches.map((p, i) => {
+        const dependsOn: string[] = [];
+        for (let j = 0; j < i; j++) {
+          const prev = result.patches![j];
+          if (p.range.start < prev.range.end && p.range.end > prev.range.start) {
+            dependsOn.push(`patch-${j}`);
+          }
+        }
+        return createAiGeneratedPatch(i, p, dependsOn.length > 0 ? dependsOn : undefined);
+      });
+      const aiPatches = patchesWithDeps;
+      const aiSession = AISession.create(
+        filePath,
+        prompt,
+        { content: fileContent, cursorPosition: runtime.editorContext.selection?.start },
+        aiPatches,
+        {
+          engineId: engine.id,
+          providerId: engineSettings.providerId,
+          model: engineSettings.model,
+          temperature: engineSettings.temperature,
+          maxTokens: engineSettings.maxTokens,
+          duration: 0,
+          outputFormat: result.outputFormat,
+        },
+      );
+      runtime.aiSessions.startSession(aiSession);
+
       const pipeline = runtime.getEditPipeline();
       const suggestion = await pipeline.propose({
         filePath,
@@ -175,9 +206,16 @@ const coderCommand: Command = {
         source: 'ai-coder',
       });
 
+      eventBus.emit('ai:session-started', {
+        timestamp: Date.now(),
+        sessionId: aiSession.sessionId,
+        filePath,
+        patchCount: aiPatches.length,
+      });
+
       return {
         success: true,
-        message: `AI proposed changes for ${filePath} (engine: ${result.engine})\n${suggestion.diff}`,
+        message: `AI proposed changes for ${filePath} (engine: ${result.engine})\n${suggestion.diff}\n\nUse >accept, >reject, >accept all to review patches.`,
         data: {
           type: 'edit-workflow',
           path: filePath,
@@ -190,6 +228,7 @@ const coderCommand: Command = {
             engine: result.engine,
             suggestionId: suggestion.id,
             patches: result.patches,
+            sessionId: aiSession.sessionId,
           },
         },
       };

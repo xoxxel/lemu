@@ -4,6 +4,7 @@ import { coderManifest } from './manifest';
 import { coderDefaultSettings, coderSettingsSchema } from './settings';
 import { coderCommand } from './coder-command';
 import { coderDocs } from './docs';
+import { aiPanelActions } from './ai-panel-actions';
 
 function syncSettingsToContext(ctx: PluginContext): void {
   const appCtx = ctx.context;
@@ -30,5 +31,9 @@ export const coderPlugin: Plugin = {
 
   async onReady(ctx: PluginContext): Promise<void> {
     syncSettingsToContext(ctx);
+    /* register AI panel actions on edit-workflow tab (active during AI review) */
+    for (const action of aiPanelActions) {
+      ctx.actions.register('edit-workflow', action);
+    }
   },
 };

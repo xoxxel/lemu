@@ -29,6 +29,8 @@ import { OperationRegistry, TransactionPipeline, replaceHandler, insertHandler, 
 import { resolveScopeNode } from '../operations/scope/resolver';
 import type { OperationResult, PipelineContext, Operation } from '../operations';
 import type { ScopeNode, ResolvedScope } from '../operations/scope/types';
+import { AISessionManager } from '../coder/session-manager';
+import { GroupedHistory } from '../operations/grouped-history';
 
 const appWrappers: unknown[] = [];
 
@@ -196,6 +198,8 @@ export interface Runtime {
     getDefault(): CoderEngine | undefined;
     get(id: string): CoderEngine | undefined;
   };
+  aiSessions: AISessionManager;
+  groupedHistory: GroupedHistory;
   /** Set by App.tsx — provides the active editor tab's state for commands */
   editorContext: PipelineContext;
 }
@@ -399,6 +403,8 @@ export async function createRuntime(): Promise<Runtime> {
   coderEngineRegistry.register('default', defaultCoderEngine);
   coderEngineRegistry.register('aider', aiderCoderEngine);
   coderEngineRegistry.setDefault('default');
+  const aiSessionManager = new AISessionManager();
+  const groupedHistory = new GroupedHistory();
   const editorContext: PipelineContext = { document: '', path: '', state: {} };
   const pluginContext = createPluginContext(actionRegistry, viewComponentMap, viewMetaMap);
   const pluginLoader = new PluginLoader(pluginRegistry, pluginContext);
@@ -632,6 +638,8 @@ export async function createRuntime(): Promise<Runtime> {
       getDefault: () => coderEngineRegistry.getDefault(),
       get: (id: string) => coderEngineRegistry.get(id),
     },
+    aiSessions: aiSessionManager,
+    groupedHistory,
     editorContext,
 
     async init(plugins) {
