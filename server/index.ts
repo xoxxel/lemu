@@ -6,6 +6,7 @@ import http from 'http';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { setupWebSocket } from './ws';
+import { runAider, checkAiderAvailable } from './coder';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -288,6 +289,40 @@ app.get('/api/workspace', (req, res) => {
     cwd: WORKSPACE,
     name: path.basename(WORKSPACE),
   });
+});
+
+// Aider coding engine endpoint
+app.post('/api/coder/generate', async (req, res) => {
+  try {
+    const { filePath, instructions, currentContent, providerId, model, temperature, maxTokens } = req.body;
+
+    if (!filePath || !instructions) {
+      return res.json({ success: false, error: 'filePath and instructions are required' });
+    }
+
+    const result = await runAider({
+      filePath,
+      instructions,
+      currentContent: currentContent || '',
+      providerId,
+      model,
+      temperature,
+      maxTokens,
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.json({
+      success: false,
+      patches: [],
+      error: `Aider route error: ${err instanceof Error ? err.message : String(err)}`,
+    });
+  }
+});
+
+app.get('/api/coder/health', async (_req, res) => {
+  const available = await checkAiderAvailable();
+  res.json({ available });
 });
 
 const server = http.createServer(app);

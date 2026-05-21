@@ -1,6 +1,8 @@
 import type { ComponentType } from 'react';
 import { registry } from '../commands/registry';
 import { PluginRegistry, PluginLoader, type PluginContext, type AppRenderContext, type CommandExecutedPayload, type PluginInputPayload, type PluginInputResult } from '../plugin-system';
+import { CoderEngineRegistry, DefaultCoderEngine, AiderCoderEngine } from '../coder';
+import type { CoderEngine } from '../coder';
 import { eventBus, RuntimeEventTypes, DomainEventTypes } from '../events';
 import { executor } from '../executor';
 import { ActionRegistry } from '../actions';
@@ -23,7 +25,7 @@ import { grammarRegistry, suggestionEngine } from '../grammar';
 import type { GrammarContext, GrammarSuggestion } from '../grammar';
 import { registry as cmdRegistry } from '../commands/registry';
 import { OwnershipManager, type OwnershipState } from '../ownership';
-import { OperationRegistry, TransactionPipeline, replaceHandler, insertHandler, deleteHandler, ScopeCapabilityRegistry, parseScope } from '../operations';
+import { OperationRegistry, TransactionPipeline, replaceHandler, insertHandler, deleteHandler, aiTransformHandler, ScopeCapabilityRegistry, parseScope } from '../operations';
 import { resolveScopeNode } from '../operations/scope/resolver';
 import type { OperationResult, PipelineContext, Operation } from '../operations';
 import type { ScopeNode, ResolvedScope } from '../operations/scope/types';
@@ -188,6 +190,11 @@ export interface Runtime {
     parse(input: string): { node: ScopeNode | null; remaining: string };
     resolve(node: ScopeNode, ctx: PipelineContext): ResolvedScope;
     capabilities: ScopeCapabilityRegistry;
+  };
+  coderEngines: {
+    registry: CoderEngineRegistry;
+    getDefault(): CoderEngine | undefined;
+    get(id: string): CoderEngine | undefined;
   };
   /** Set by App.tsx — provides the active editor tab's state for commands */
   editorContext: PipelineContext;
@@ -381,10 +388,17 @@ export async function createRuntime(): Promise<Runtime> {
   operationRegistry.register(replaceHandler);
   operationRegistry.register(insertHandler);
   operationRegistry.register(deleteHandler);
+  operationRegistry.register(aiTransformHandler);
   for (const h of operationRegistry.getAll()) {
     scopeCapabilityRegistry.register(h.type, h.supportedScopes);
   }
   const operationPipeline = new TransactionPipeline(operationRegistry);
+  const coderEngineRegistry = new CoderEngineRegistry();
+  const defaultCoderEngine = new DefaultCoderEngine(providerRegistry);
+  const aiderCoderEngine = new AiderCoderEngine();
+  coderEngineRegistry.register('default', defaultCoderEngine);
+  coderEngineRegistry.register('aider', aiderCoderEngine);
+  coderEngineRegistry.setDefault('default');
   const editorContext: PipelineContext = { document: '', path: '', state: {} };
   const pluginContext = createPluginContext(actionRegistry, viewComponentMap, viewMetaMap);
   const pluginLoader = new PluginLoader(pluginRegistry, pluginContext);
@@ -612,6 +626,11 @@ export async function createRuntime(): Promise<Runtime> {
         return resolveScopeNode(node, ctx);
       },
       capabilities: scopeCapabilityRegistry,
+    },
+    coderEngines: {
+      registry: coderEngineRegistry,
+      getDefault: () => coderEngineRegistry.getDefault(),
+      get: (id: string) => coderEngineRegistry.get(id),
     },
     editorContext,
 

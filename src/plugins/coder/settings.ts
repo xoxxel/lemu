@@ -1,6 +1,7 @@
 import type { PluginSettings, PluginSettingsSchema } from '../../core/plugin-system/types';
 
 export const coderDefaultSettings: PluginSettings = {
+  engine: 'default',
   provider: '',
   model: '',
   maxTokens: 4096,
@@ -9,6 +10,12 @@ export const coderDefaultSettings: PluginSettings = {
 };
 
 export const coderSettingsSchema: PluginSettingsSchema = {
+  engine: {
+    type: 'string',
+    label: 'Coding engine',
+    description: 'Engine to use (default = AI provider, aider = Aider CLI)',
+    placeholder: 'default',
+  },
   provider: {
     type: 'string',
     label: 'AI provider',

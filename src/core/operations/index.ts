@@ -2,7 +2,7 @@ export { TransactionPipeline } from './pipeline';
 export { OperationRegistry } from './registry';
 export { resolveScope, resolveToOffsets, describeScope } from './scope';
 export { applyPatches, validatePatches, invertPatches, collapsePatches } from './patch';
-export { replaceHandler, insertHandler, deleteHandler } from './operations';
+export { replaceHandler, insertHandler, deleteHandler, aiTransformHandler } from './operations';
 
 export { parseScope, parseScopeWithDefault } from './scope/parser';
 export { resolveScopeNode } from './scope/resolver';
