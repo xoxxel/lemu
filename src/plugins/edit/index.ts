@@ -8,6 +8,7 @@ import { editWorkflowActions } from './actions';
 import { parseScopeWithDefault } from '../../core/operations/scope/parser';
 import { resolveScopeNode } from '../../core/operations/scope/resolver';
 import type { Operation, PipelineContext } from '../../core/operations/types';
+import type { CMEditorSession } from '../../core/editor';
 
 function countMatchesInRange(text: string, searchText: string, start: number, end: number): number {
   const lowerText = text.toLowerCase();
@@ -51,7 +52,11 @@ function handleReplaceInput(
     const searchRange = resolved.targets[0] ?? { start: 0, end: document.length };
     const matchCount = countMatchesInRange(document, searchText, searchRange.start, searchRange.end);
 
-    appCtx.set('edit:search:execute', searchText);
+    const session = appCtx.get<CMEditorSession>('edit:session');
+    if (session) {
+      session.find(searchText, searchRange);
+    }
+    appCtx.set('edit:replace:refreshTick', Date.now());
 
     if (matchCount === 0) {
       appCtx.set('edit:replace:event', { type: 'search_empty', text: `No matches found for "${searchText}"` });
@@ -109,7 +114,11 @@ function handleReplaceInput(
 
     const eventText = `Replaced ${patchCount} occurrence${patchCount > 1 ? 's' : ''}: "${fromText}" → "${toText}"`;
     appCtx.set('edit:replace:event', { type: 'replace_success', text: eventText });
-    appCtx.set('edit:search:execute', '');
+    const session = appCtx.get<CMEditorSession>('edit:session');
+    if (session) {
+      session.clearSearch();
+    }
+    appCtx.set('edit:replace:refreshTick', Date.now());
 
     return {
       message: eventText,

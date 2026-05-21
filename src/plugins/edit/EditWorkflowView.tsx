@@ -27,6 +27,7 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
 
   const session = sessionRef.current;
   const appCtx = getRuntime().getContext();
+  appCtx.set('edit:session', session);
 
   const [renderTick, setRenderTick] = useState(0);
   const [statusMsg, setStatusMsg] = useState('');
@@ -43,7 +44,9 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
   useEffect(() => {
     const s = sessionRef.current;
     if (s.originalContent !== originalContent || initialContent !== lastSyncedContentRef.current) {
-      sessionRef.current = new CMEditorSession({ originalContent, initialContent: initialContent ?? originalContent });
+      const newSession = new CMEditorSession({ originalContent, initialContent: initialContent ?? originalContent });
+      sessionRef.current = newSession;
+      appCtx.set('edit:session', newSession);
       lastSyncedContentRef.current = initialContent;
       setEditingRange(null);
       rerender();
@@ -149,7 +152,18 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
         rerender();
       }),
       appCtx.onChange('edit:search:execute', (_k, v) => {
-        if (typeof v === 'string') { sessionRef.current.find(v); rerender(); }
+        if (typeof v === 'string') {
+          const s = sessionRef.current;
+          if (s.activeRange) {
+            s.find(v, s.activeRange);
+          } else {
+            s.find(v);
+          }
+          rerender();
+        }
+      }),
+      appCtx.onChange('edit:replace:refreshTick', () => {
+        rerender();
       }),
       appCtx.onChange('edit:search:mode', (_k, v) => {
         if (v === true) {

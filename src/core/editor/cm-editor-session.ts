@@ -35,6 +35,7 @@ export class CMEditorSession {
   private _searchQuery: string = '';
   private _searchMatches: SearchMatch[] = [];
   private _searchMatchIndex: number = -1;
+  private _searchRange: { start: number; end: number } | null = null;
 
   constructor(config: { originalContent: string; initialContent?: string }) {
     this.originalContent = config.originalContent;
@@ -234,10 +235,15 @@ export class CMEditorSession {
     };
   }
 
-  find(query: string): void {
+  get searchRange(): { start: number; end: number } | null {
+    return this._searchRange;
+  }
+
+  find(query: string, range?: { start: number; end: number }): void {
     this._searchQuery = query;
     this._searchMatches = [];
     this._searchMatchIndex = -1;
+    this._searchRange = range ?? null;
 
     if (!query) return;
 
@@ -245,10 +251,12 @@ export class CMEditorSession {
     const lowerDoc = docStr.toLowerCase();
     const lowerQuery = query.toLowerCase();
     const matches: SearchMatch[] = [];
-    let pos = 0;
-    while (pos < docStr.length) {
+    const searchStart = range?.start ?? 0;
+    const searchEnd = range?.end ?? docStr.length;
+    let pos = searchStart;
+    while (pos < searchEnd) {
       const idx = lowerDoc.indexOf(lowerQuery, pos);
-      if (idx === -1) break;
+      if (idx === -1 || idx >= searchEnd) break;
       const line = this._fullState.doc.lineAt(idx).number;
       matches.push({ from: idx, to: idx + query.length, line });
       pos = idx + query.length;
@@ -264,6 +272,7 @@ export class CMEditorSession {
   clearSearch(): void {
     this._searchQuery = '';
     this._searchMatches = [];
+    this._searchRange = null;
     this._searchMatchIndex = -1;
   }
 
@@ -318,8 +327,10 @@ export class CMEditorSession {
     const searchLines = new Set<number>();
     const lineHighlights = new Map<number, { start: number; end: number }[]>();
     let activeSearchLine = -1;
+    const searchRange = this._searchRange;
     if (this._searchQuery && this._searchMatches.length > 0) {
       for (const m of this._searchMatches) {
+        if (searchRange && (m.from < searchRange.start || m.to > searchRange.end)) continue;
         searchLines.add(m.line);
         const lineStart = doc.line(m.line).from;
         lineHighlights.set(m.line, [
@@ -328,7 +339,10 @@ export class CMEditorSession {
         ]);
       }
       if (this._searchMatchIndex >= 0 && this._searchMatchIndex < this._searchMatches.length) {
-        activeSearchLine = this._searchMatches[this._searchMatchIndex].line;
+        const currentMatch = this._searchMatches[this._searchMatchIndex];
+        if (!searchRange || (currentMatch.from >= searchRange.start && currentMatch.to <= searchRange.end)) {
+          activeSearchLine = currentMatch.line;
+        }
       }
     }
 

@@ -1,0 +1,27 @@
+// lemu replace test — comment line 0
+import { foo } from './bar';
+import { baz } from './qux';
+
+const greeting = 'hello world';
+const target = 'world';
+const count = 100;
+
+function demo() {
+  // this is a nested comment
+  const msg = 'hello world again';
+  const msg = 'comment';
+  const other = 'world';
+  return msg + other;
+}
+
+const data = {
+  hello: 'world',
+  nested: {
+    hello: 'world again',
+  },
+};
+
+// duplicate patterns for multi-match tests
+hello world
+hello world
+hello world
