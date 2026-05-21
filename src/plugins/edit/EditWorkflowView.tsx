@@ -41,7 +41,8 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
 
   /* ── sync from parent state prop (handles external content updates from replace action) ── */
   useEffect(() => {
-    if (session.originalContent !== originalContent || initialContent !== lastSyncedContentRef.current) {
+    const s = sessionRef.current;
+    if (s.originalContent !== originalContent || initialContent !== lastSyncedContentRef.current) {
       sessionRef.current = new CMEditorSession({ originalContent, initialContent: initialContent ?? originalContent });
       lastSyncedContentRef.current = initialContent;
       setEditingRange(null);
@@ -53,10 +54,11 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
   const [focusSeq, setFocusSeq] = useState(0);
   useEffect(() => {
     if (pendingFocus.value) {
+      const s = sessionRef.current;
       const range = pendingFocus.value;
       pendingFocus.value = null;
-      const clamped = clampRange(range, session.lineCount);
-      session.setActiveRange(clamped);
+      const clamped = clampRange(range, s.lineCount);
+      s.setActiveRange(clamped);
       setEditingRange(clamped);
       scrollToLine(clamped.start);
       rerender();
@@ -73,24 +75,25 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
   /* ── CM6 range view mount ── */
   useEffect(() => {
     if (!editingRange || !rangeMountRef.current) return;
-    const view = session.mountRangeView(rangeMountRef.current);
+    const s = sessionRef.current;
+    const view = s.mountRangeView(rangeMountRef.current);
     if (!view) { setEditingRange(null); return; }
-    session.onChange(() => rerender());
-    session.onCommit(() => {
-      const op = session.commitRange();
+    s.onChange(() => rerender());
+    s.onCommit(() => {
+      const op = s.commitRange();
       setStatusMsg(op ? 'Edit committed.' : 'No changes to commit.');
       setEditingRange(null);
       rerender();
     });
-    session.onCancel(() => {
-      session.cancelRange();
+    s.onCancel(() => {
+      s.cancelRange();
       setStatusMsg('Cancelled.');
       setEditingRange(null);
       rerender();
     });
     view.focus();
     return () => {
-      if (session.activeRange) { session.destroy(); session.setActiveRange(null); }
+      if (s.activeRange) { s.destroy(); s.setActiveRange(null); }
     };
   }, [editingRange]);
 
@@ -138,21 +141,22 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
   useEffect(() => {
     const us = [
       appCtx.onChange('edit:search:navigate', (_k, v) => {
-        if (v === 'next') session.nextMatch();
-        else if (v === 'prev') session.prevMatch();
-        const current = session.searchSession.matches[session.searchSession.matchIndex];
+        const s = sessionRef.current;
+        if (v === 'next') s.nextMatch();
+        else if (v === 'prev') s.prevMatch();
+        const current = s.searchSession.matches[s.searchSession.matchIndex];
         if (current) scrollToLine(current.line);
         rerender();
       }),
       appCtx.onChange('edit:search:execute', (_k, v) => {
-        if (typeof v === 'string') { session.find(v); rerender(); }
+        if (typeof v === 'string') { sessionRef.current.find(v); rerender(); }
       }),
       appCtx.onChange('edit:search:mode', (_k, v) => {
         if (v === true) {
           rerender();
           return;
         }
-        session.clearSearch();
+        sessionRef.current.clearSearch();
         rerender();
       }),
     ];
