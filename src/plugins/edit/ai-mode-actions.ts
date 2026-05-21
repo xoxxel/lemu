@@ -2,16 +2,25 @@ import { getRuntime } from '../../core/runtime/instance';
 import { invertPatches, applyPatches as applyPatchesToDoc } from '../../core/operations/patch';
 import type { PluginAction, ActionContext } from '../../core/actions/types';
 
-export async function acceptPatch(ctx: ActionContext): Promise<string> {
+export type PatchEntry = { range: { start: number; end: number }; oldText: string; newText: string; state?: string };
+
+function readPatches(): PatchEntry[] | undefined {
+  return getRuntime().getContext().get<Array<PatchEntry>>('edit:ai:patches');
+}
+
+function setDoc(document: string, setState?: (s: { currentContent: string }) => void) {
+  const runtime = getRuntime();
+  runtime.editorContext.document = document;
+  setState?.({ currentContent: document });
+}
+
+export async function acceptPatchById(index: number, setState?: (s: { currentContent: string }) => void): Promise<string> {
   const runtime = getRuntime();
   const appCtx = runtime.getContext();
-  const patches = appCtx.get<Array<{ range: { start: number; end: number }; oldText: string; newText: string; state?: string }>>('edit:ai:patches');
+  const patches = readPatches();
 
   if (!patches || patches.length === 0) return 'No AI patches to accept.';
-
-  const query = (ctx.query || '').replace(/^accept\s*/i, '').trim();
-  const index = parseInt(query, 10);
-  if (isNaN(index) || index < 1 || index > patches.length) {
+  if (index < 1 || index > patches.length) {
     return `Usage: >accept <n> where n is 1-${patches.length}`;
   }
 
@@ -31,22 +40,26 @@ export async function acceptPatch(ctx: ActionContext): Promise<string> {
     return `Apply failed: ${err instanceof Error ? err.message : String(err)}`;
   }
 
-  runtime.editorContext.document = newDocument;
+  setDoc(newDocument, setState);
   appCtx.set('edit:ai:patches', updatedPatches);
-  ctx.setState?.({ currentContent: newDocument });
   return `Accepted patch ${index}. Changes applied to editor. Use >apply-patches to write to disk.`;
 }
 
-export async function rejectPatch(ctx: ActionContext): Promise<string> {
+export async function acceptPatch(ctx: ActionContext): Promise<string> {
+  const patches = readPatches();
+  const query = (ctx.query || '').replace(/^accept\s*/i, '').trim();
+  const index = parseInt(query, 10);
+  if (isNaN(index)) return `Usage: >accept <n> where n is 1-${patches?.length ?? 0}`;
+  return acceptPatchById(index, ctx.setState);
+}
+
+export async function rejectPatchById(index: number, setState?: (s: { currentContent: string }) => void): Promise<string> {
   const runtime = getRuntime();
   const appCtx = runtime.getContext();
-  const patches = appCtx.get<Array<{ range: { start: number; end: number }; oldText: string; newText: string; state?: string }>>('edit:ai:patches');
+  const patches = readPatches();
 
   if (!patches || patches.length === 0) return 'No AI patches to reject.';
-
-  const query = (ctx.query || '').replace(/^reject\s*/i, '').trim();
-  const index = parseInt(query, 10);
-  if (isNaN(index) || index < 1 || index > patches.length) {
+  if (index < 1 || index > patches.length) {
     return `Usage: >reject <n> where n is 1-${patches.length}`;
   }
 
@@ -58,10 +71,17 @@ export async function rejectPatch(ctx: ActionContext): Promise<string> {
   const baseDocument = appCtx.get<string>('edit:ai:baseDocument') ?? runtime.editorContext.document;
   try {
     const refreshed = accepted.length > 0 ? applyPatchesToDoc(baseDocument, accepted) : baseDocument;
-    runtime.editorContext.document = refreshed;
-    ctx.setState?.({ currentContent: refreshed });
+    setDoc(refreshed, setState);
   } catch { }
   return `Rejected patch ${index}.`;
+}
+
+export async function rejectPatch(ctx: ActionContext): Promise<string> {
+  const patches = readPatches();
+  const query = (ctx.query || '').replace(/^reject\s*/i, '').trim();
+  const index = parseInt(query, 10);
+  if (isNaN(index)) return `Usage: >reject <n> where n is 1-${patches?.length ?? 0}`;
+  return rejectPatchById(index, ctx.setState);
 }
 
 export async function applyPatches(ctx: ActionContext): Promise<string> {
@@ -162,9 +182,43 @@ const aiApplyAction: PluginAction = {
   handler: applyPatches,
 };
 
+const nextPatchAction: PluginAction = {
+  id: 'next patch',
+  type: 'edit-workflow',
+  title: 'Next Patch',
+  description: 'Navigate to the next patch in the editor',
+  handler: async () => {
+    const appCtx = getRuntime().getContext();
+    const patches = readPatches();
+    if (!patches || patches.length === 0) return 'No patches to navigate.';
+    const current = appCtx.get<number>('edit:ai:patchFocus') ?? -1;
+    const next = (current + 1) % patches.length;
+    appCtx.set('edit:ai:patchFocus', next);
+    return `Patch ${next + 1} of ${patches.length}`;
+  },
+};
+
+const prevPatchAction: PluginAction = {
+  id: 'prev patch',
+  type: 'edit-workflow',
+  title: 'Previous Patch',
+  description: 'Navigate to the previous patch in the editor',
+  handler: async () => {
+    const appCtx = getRuntime().getContext();
+    const patches = readPatches();
+    if (!patches || patches.length === 0) return 'No patches to navigate.';
+    const current = appCtx.get<number>('edit:ai:patchFocus') ?? 1;
+    const prev = (current - 1 + patches.length) % patches.length;
+    appCtx.set('edit:ai:patchFocus', prev);
+    return `Patch ${prev + 1} of ${patches.length}`;
+  },
+};
+
 export const aiModeActions: PluginAction[] = [
   aiToggleAction,
   aiAcceptAction,
   aiRejectAction,
   aiApplyAction,
+  nextPatchAction,
+  prevPatchAction,
 ];
