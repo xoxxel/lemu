@@ -37,10 +37,13 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
 
   const rerender = useCallback(() => setRenderTick(t => t + 1), []);
 
-  /* ── sync from parent state prop ── */
+  const lastSyncedContentRef = useRef(initialContent);
+
+  /* ── sync from parent state prop (handles external content updates from replace action) ── */
   useEffect(() => {
-    if (session.originalContent !== originalContent) {
-      sessionRef.current = new CMEditorSession({ originalContent, initialContent });
+    if (session.originalContent !== originalContent || initialContent !== lastSyncedContentRef.current) {
+      sessionRef.current = new CMEditorSession({ originalContent, initialContent: initialContent ?? originalContent });
+      lastSyncedContentRef.current = initialContent;
       setEditingRange(null);
       rerender();
     }

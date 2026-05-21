@@ -1,5 +1,6 @@
 import type { PluginAction } from '../../core/actions/types';
 import { getRuntime } from '../../core/runtime/instance';
+import { replaceAction } from './replace-action';
 
 function getPendingKey(tabId: string): string {
   return `edit:pending:${tabId}`;
@@ -212,4 +213,5 @@ export const editWorkflowActions: PluginAction[] = [
   findAction,
   nextAction,
   prevAction,
+  replaceAction,
 ];
