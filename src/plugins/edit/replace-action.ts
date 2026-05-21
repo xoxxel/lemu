@@ -6,11 +6,9 @@ export const replaceAction: PluginAction = {
   type: 'edit-workflow',
   title: 'Replace mode',
   description: 'Toggle interactive find-and-replace mode. Owns plain-text input while active.',
-  ownsInput: true,
   handler: async (ctx) => {
     const runtime = getRuntime();
     const appCtx = runtime.getContext();
-    const replaceMode = appCtx.get<boolean>('edit:replace:mode') ?? false;
     const query = ctx.query.replace(/^replace\s*/, '').trim();
     const subcommand = query.toLowerCase();
 
@@ -19,11 +17,13 @@ export const replaceAction: PluginAction = {
       appCtx.set('edit:replace:mode', false);
       appCtx.set('edit:replace:matchCount', 0);
       appCtx.set('edit:search:mode', false);
+      appCtx.set('edit:search:execute', '');
       appCtx.set('action:suffix:replace', undefined);
+      appCtx.set('edit:replace:event', { type: 'mode_exited', text: 'Replace mode deactivated' });
       return 'Replace mode OFF';
     }
 
-    if (replaceMode) {
+    if (runtime.ownership.isOwnedBy('edit')) {
       return 'Tab already in replace mode. Use >replace off to exit.';
     }
 
@@ -31,6 +31,7 @@ export const replaceAction: PluginAction = {
     appCtx.set('edit:replace:mode', true);
     appCtx.set('edit:replace:matchCount', 0);
     appCtx.set('action:suffix:replace', '[on]');
+    appCtx.set('edit:replace:event', { type: 'mode_entered', text: 'Replace mode active' });
     return 'Replace mode ON — type [scope]from=>to (press Enter to search, include => to replace)';
   },
 };

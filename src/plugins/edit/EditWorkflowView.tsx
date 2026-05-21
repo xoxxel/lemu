@@ -118,6 +118,22 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
     el.scrollTop = Math.max(0, (line - 1) * LINE_HEIGHT - el.clientHeight / 3);
   }, []);
 
+  /* ── replace event messages (auto-dismiss) ── */
+  useEffect(() => {
+    const timer = setTimeout(() => setStatusMsg(''), 4000);
+    return () => clearTimeout(timer);
+  }, [statusMsg]);
+
+  useEffect(() => {
+    return appCtx.onChange('edit:replace:event', (_k, v) => {
+      if (v && typeof v === 'object') {
+        const ev = v as { type: string; text: string };
+        setStatusMsg(ev.text);
+        rerender();
+      }
+    });
+  }, []);
+
   /* ── search: subscribe to appContext navigation/execute ── */
   useEffect(() => {
     const us = [
@@ -339,18 +355,56 @@ function RangeCodeView({ lineMetadata, range, rangeMountRef }: {
   );
 }
 
-/* ─── Single line row with gutter indicator + search highlights ─── */
+/* ─── Single line row with gutter indicator + text-level search highlights ─── */
+
+function renderHighlightedContent(content: string, highlights: { start: number; end: number }[]): React.ReactNode[] {
+  if (!highlights || highlights.length === 0 || !content) {
+    return [content || ' '];
+  }
+
+  const sorted = [...highlights].sort((a, b) => a.start - b.start);
+  const segments: React.ReactNode[] = [];
+  let pos = 0;
+
+  for (const h of sorted) {
+    if (h.start > content.length || h.end > content.length) continue;
+    if (h.start < pos) continue;
+
+    if (h.start > pos) {
+      segments.push(<span key={`t-${pos}`}>{content.slice(pos, h.start)}</span>);
+    }
+
+    segments.push(
+      <mark key={`m-${h.start}`} style={{
+        background: 'rgba(255, 200, 0, 0.4)',
+        color: 'inherit',
+        borderRadius: 2,
+        padding: '0 1px',
+      }}>
+        {content.slice(h.start, h.end)}
+      </mark>
+    );
+
+    pos = h.end;
+  }
+
+  if (pos < content.length) {
+    segments.push(<span key={`t-${pos}`}>{content.slice(pos)}</span>);
+  }
+
+  return segments;
+}
 
 function LineRow({ state }: { state: LineState }) {
   let gutterColor = 'transparent';
   let background = 'transparent';
 
   if (state.isActiveSearchMatch) {
-    gutterColor = '#2196f3';
-    background = 'rgba(33, 150, 243, 0.08)';
+    gutterColor = '#e6a817';
+    background = 'rgba(255, 200, 0, 0.08)';
   } else if (state.isSearchMatch) {
-    gutterColor = '#2196f3';
-    background = 'rgba(33, 150, 243, 0.04)';
+    gutterColor = '#e6a817';
+    background = 'rgba(255, 200, 0, 0.04)';
   } else if (state.isModified) {
     gutterColor = '#ff9800';
     background = 'rgba(255, 152, 0, 0.04)';
@@ -362,12 +416,16 @@ function LineRow({ state }: { state: LineState }) {
     background = 'rgba(255, 23, 68, 0.04)';
   }
 
+  const content = state.searchHighlights?.length
+    ? renderHighlightedContent(state.content, state.searchHighlights)
+    : (state.content || ' ');
+
   return (
     <div style={{ display: 'flex', background }}>
       <div style={{ width: 3, flexShrink: 0, background: gutterColor }} />
       <span style={{
         display: 'inline-block', width: 45, textAlign: 'right', paddingRight: 12,
-        color: state.isActiveSearchMatch ? '#2196f3' : state.isActiveRange ? '#ff9800' : 'var(--text-muted)',
+        color: state.isActiveSearchMatch ? '#e6a817' : state.isActiveRange ? '#ff9800' : 'var(--text-muted)',
         userSelect: 'none', fontSize: 11, lineHeight: '20px', flexShrink: 0,
       }}>
         {state.lineNumber}
@@ -376,7 +434,7 @@ function LineRow({ state }: { state: LineState }) {
         whiteSpace: 'pre', fontFamily: 'var(--font-mono)', fontSize: 13,
         lineHeight: '20px', color: 'var(--text-primary)',
       }}>
-        {state.isActiveSearchMatch ? `${state.content}  ←` : (state.content || ' ')}
+        {state.isActiveSearchMatch ? <>{content}<span style={{ color: '#e6a817' }}>  {'←'}</span></> : content}
       </span>
     </div>
   );

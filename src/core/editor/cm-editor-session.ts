@@ -316,9 +316,17 @@ export class CMEditorSession {
     });
 
     const searchLines = new Set<number>();
+    const lineHighlights = new Map<number, { start: number; end: number }[]>();
     let activeSearchLine = -1;
     if (this._searchQuery && this._searchMatches.length > 0) {
-      for (const m of this._searchMatches) searchLines.add(m.line);
+      for (const m of this._searchMatches) {
+        searchLines.add(m.line);
+        const lineStart = doc.line(m.line).from;
+        lineHighlights.set(m.line, [
+          ...(lineHighlights.get(m.line) ?? []),
+          { start: m.from - lineStart, end: m.to - lineStart },
+        ]);
+      }
       if (this._searchMatchIndex >= 0 && this._searchMatchIndex < this._searchMatches.length) {
         activeSearchLine = this._searchMatches[this._searchMatchIndex].line;
       }
@@ -358,6 +366,7 @@ export class CMEditorSession {
           || n > this._activeRange.end,
         isSearchMatch: searchLines.has(n),
         isActiveSearchMatch: n === activeSearchLine,
+        searchHighlights: lineHighlights.get(n),
       });
     }
 

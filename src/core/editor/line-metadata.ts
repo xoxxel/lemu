@@ -12,6 +12,8 @@ export interface LineState {
   isReadonly: boolean;
   isSearchMatch: boolean;
   isActiveSearchMatch: boolean;
+  /** Column ranges within this line for text-level search highlighting */
+  searchHighlights?: { start: number; end: number }[];
 }
 
 /**
