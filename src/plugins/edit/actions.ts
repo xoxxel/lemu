@@ -4,6 +4,7 @@ import { getRuntime } from '../../core/runtime/instance';
 import { PatchNormalizer } from '../../core/coder/patch-normalizer';
 import { eventBus } from '../../core/events';
 import { replaceAction } from './replace-action';
+import { rejectPatch as aiRejectPatch, applyPatches as aiApplyPatches } from './ai-mode-actions';
 
 function getPendingKey(tabId: string): string {
   return `edit:pending:${tabId}`;
@@ -81,9 +82,15 @@ export const applyAction: PluginAction = {
   title: 'Apply changes',
   description: 'Write proposed changes to disk via transaction pipeline',
   handler: async (ctx) => {
-    const { tabId } = ctx;
     const runtime = getRuntime();
     const appCtx = runtime.getContext();
+
+    /* delegate to AI patch apply when AI mode is active */
+    if (appCtx.get<boolean>('edit:ai:active')) {
+      return aiApplyPatches(ctx);
+    }
+
+    const { tabId } = ctx;
     const suggestionId = appCtx.get<string>(getPendingKey(tabId!));
     if (!suggestionId) return 'No pending proposal. Use >propose first.';
 
@@ -148,9 +155,15 @@ export const rejectAction: PluginAction = {
   title: 'Reject changes',
   description: 'Discard the proposed changes',
   handler: async (ctx) => {
-    const { tabId } = ctx;
     const runtime = getRuntime();
     const appCtx = runtime.getContext();
+
+    /* delegate to AI patch reject when AI mode is active */
+    if (appCtx.get<boolean>('edit:ai:active')) {
+      return aiRejectPatch(ctx);
+    }
+
+    const { tabId } = ctx;
     const suggestionId = appCtx.get<string>(getPendingKey(tabId!));
     if (!suggestionId) return 'No pending proposal to reject.';
 

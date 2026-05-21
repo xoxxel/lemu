@@ -107,8 +107,14 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
     if (appCtx.get<string>('action:suffix:find') === undefined) {
       appCtx.set('action:suffix:find', '[off]');
     }
+    if (appCtx.get<string>('action:suffix:ai') === undefined) {
+      appCtx.set('action:suffix:ai', '[off]');
+    }
     if (appCtx.get<boolean>('edit:search:mode') === undefined) {
       appCtx.set('edit:search:mode', false);
+    }
+    if (appCtx.get<boolean>('edit:ai:active') === undefined) {
+      appCtx.set('edit:ai:active', false);
     }
   }, []);
   useEffect(() => {
@@ -171,6 +177,14 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
           return;
         }
         sessionRef.current.clearSearch();
+        rerender();
+      }),
+      appCtx.onChange('edit:ai:active', (_k, v) => {
+        if (v === false) {
+          // Clear AI messages and patches when exiting AI mode
+          appCtx.set('edit:ai:messages', []);
+          appCtx.set('edit:ai:patches', []);
+        }
         rerender();
       }),
     ];

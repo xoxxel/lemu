@@ -129,9 +129,10 @@ export default function App() {
   const activeTab = tabs.find((t) => t.id === activeTabId) || null;
   const activeTabType = tabs.find((t) => t.id === activeTabId)?.type ?? null;
   const prevEditorCtx = useRef<string>('');
-  if (activeTab?.type === 'editor') {
+  /* editorContext tracks the active tab's document — both 'editor' and 'edit-workflow' tabs */
+  if (activeTab && (activeTab.type === 'editor' || activeTab.type === 'edit-workflow')) {
     const s = activeTab.state as Record<string, unknown>;
-    const doc = (s.content as string) || '';
+    const doc = (s.content as string) || (s.currentContent as string) || '';
     if (prevEditorCtx.current !== doc) {
       prevEditorCtx.current = doc;
       getRuntime().editorContext.document = doc;
@@ -143,14 +144,19 @@ export default function App() {
   const { scope: activeScope } = resolveScope(inputValue, activePlugin);
   const { suggestions, selectedIndex, statusText, update: updateAutocomplete, clear: clearAutocomplete, selectNext, selectPrev, selectCurrent } = useAutocomplete(activeScope, activePlugin);
 
-  /* ── AI Panel visibility ── */
-  const [aiPanelOpen, setAiPanelOpen] = useState(() => getRuntime().aiSessions.hasActiveSession);
+  /* ── AI Panel visibility (session OR AI mode) ── */
+  const [aiPanelOpen, setAiPanelOpen] = useState(
+    () => getRuntime().aiSessions.hasActiveSession || getRuntime().getContext().get<boolean>('edit:ai:active') === true,
+  );
   const _aiSessionTick = useSyncExternalStore(
     (cb) => { const id = setInterval(cb, 200); return () => clearInterval(id); },
-    () => getRuntime().aiSessions.hasActiveSession ? 1 : 0,
+    () => (getRuntime().aiSessions.hasActiveSession || getRuntime().getContext().get<boolean>('edit:ai:active') === true) ? 1 : 0,
   );
-  if (!aiPanelOpen && getRuntime().aiSessions.hasActiveSession) {
+  if (!aiPanelOpen && (getRuntime().aiSessions.hasActiveSession || getRuntime().getContext().get<boolean>('edit:ai:active') === true)) {
     setAiPanelOpen(true);
+  }
+  if (aiPanelOpen && !getRuntime().aiSessions.hasActiveSession && getRuntime().getContext().get<boolean>('edit:ai:active') !== true) {
+    setAiPanelOpen(false);
   }
   const terminal = useTerminal();
 
