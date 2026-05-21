@@ -1,5 +1,6 @@
 import type { Command, AutocompleteItem } from '../../core/commands/types';
 import { getRuntime } from '../../core/runtime/instance';
+import { PatchNormalizer } from '../../core/coder/patch-normalizer';
 
 const api = {
   async readFile(path: string): Promise<string> {
@@ -79,6 +80,8 @@ const coderCommand: Command = {
 
     const runtime = getRuntime();
 
+    let owned = false;
+
     try {
       let fileContent = '';
       let filePath = path;
@@ -105,17 +108,18 @@ const coderCommand: Command = {
       }
 
       runtime.ownership.acquire('coder', 'coder-command', '', null);
+      owned = true;
 
       const engineSettings = resolveEngineSettings();
       const engine = runtime.coderEngines.get(engineSettings.engineId) || runtime.coderEngines.getDefault();
       if (!engine) {
-        runtime.ownership.release('coder');
+        runtime.ownership.release('coder'); owned = false;
         return { success: false, message: `No coding engine available. Configure via /coder settings.` };
       }
 
       const available = await engine.isAvailable();
       if (!available) {
-        runtime.ownership.release('coder');
+        runtime.ownership.release('coder'); owned = false;
         return { success: false, message: `Engine '${engine.id}' is not available. Check configuration.` };
       }
 
@@ -135,7 +139,23 @@ const coderCommand: Command = {
         maxTokens: engineSettings.maxTokens,
       });
 
-      runtime.ownership.release('coder');
+      runtime.ownership.release('coder'); owned = false;
+
+      if (result.outputFormat === 'patches') {
+        if (!result.patches || result.patches.length === 0) {
+          return { success: false, message: 'Engine produced no patches. Try a more specific request.' };
+        }
+      } else if (result.outputFormat === 'fullFile') {
+        if (!result.output) {
+          return { success: false, message: 'Engine returned no output. Try a more specific request.' };
+        }
+        result.patches = PatchNormalizer.fromFullFile(fileContent, result.output);
+        if (result.patches.length === 0) {
+          return { success: false, message: 'Engine returned no changes. Try a more specific request.' };
+        }
+      } else {
+        return { success: false, message: `Engine returned unsupported output format: '${result.outputFormat}'` };
+      }
 
       if (!result.patches || result.patches.length === 0) {
         return { success: false, message: 'Engine produced no changes. Try a more specific request.' };
@@ -174,11 +194,14 @@ const coderCommand: Command = {
         },
       };
     } catch (err) {
-      try { runtime.ownership.release('coder'); } catch {}
       return {
         success: false,
         message: `Coder error: ${err instanceof Error ? err.message : String(err)}`,
       };
+    } finally {
+      if (owned) {
+        try { runtime.ownership.release('coder'); } catch {}
+      }
     }
   },
 

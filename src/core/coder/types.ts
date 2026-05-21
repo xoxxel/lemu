@@ -1,5 +1,7 @@
 import type { Patch } from '../operations/types';
 
+export type OutputFormat = 'fullFile' | 'unifiedDiff' | 'searchReplace' | 'patches';
+
 export interface CodingTask {
   filePath: string;
   instructions: string;
@@ -12,7 +14,9 @@ export interface CodingTask {
 }
 
 export interface CodingResult {
-  patches: Patch[];
+  patches?: Patch[];
+  output?: string;
+  outputFormat: OutputFormat;
   explanation?: string;
   engine: string;
   metadata?: Record<string, unknown>;

@@ -25,6 +25,7 @@ export class AiderCoderEngine implements CoderEngine {
     }
 
     return {
+      outputFormat: 'patches',
       patches: data.patches,
       explanation: data.explanation,
       engine: this.id,

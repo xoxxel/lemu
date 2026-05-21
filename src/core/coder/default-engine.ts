@@ -49,7 +49,9 @@ export class DefaultCoderEngine implements CoderEngine {
     const patches = PatchNormalizer.fromFullFile(task.currentContent, proposedContent);
 
     return {
+      outputFormat: 'fullFile',
       patches,
+      output: proposedContent,
       explanation: response.content,
       engine: this.id,
       metadata: {
