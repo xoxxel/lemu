@@ -193,56 +193,6 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
 
   /* command handling moved to main app input via App.tsx; no internal input here */
 
-  /* ── workflow handlers ── */
-  const handlePropose = async () => {
-    const runtime = getRuntime();
-    const suggestion = await runtime.getEditPipeline().propose({
-      filePath: (state as Record<string, string>).path ?? '',
-      originalContent: session.originalContent,
-      proposedContent: session.content,
-      source: 'user',
-    });
-    runtime.getContext().set('edit:pending:active', suggestion.id);
-    setStatusMsg(`Proposed — ${suggestion.diff.slice(0, 200)}${suggestion.diff.length > 200 ? '...' : ''}`);
-    rerender();
-  };
-
-  const handleApply = async () => {
-    const runtime = getRuntime();
-    const sid = runtime.getContext().get<string>('edit:pending:active');
-    if (!sid) { setStatusMsg('No pending proposal.'); return; }
-    const result = await runtime.getEditPipeline().approve(sid);
-    if (!result) { setStatusMsg('Suggestion not found.'); return; }
-    try {
-      const res = await fetch('/api/fs/write', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: result.filePath, content: result.proposedContent }),
-      });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error);
-    } catch (err) {
-      setStatusMsg(`Write failed: ${err instanceof Error ? err.message : String(err)}`);
-      return;
-    }
-    runtime.getContext().remove('edit:pending:active');
-    setStatusMsg(`Applied to ${result.filePath}`);
-    rerender();
-  };
-
-  const handleReject = () => {
-    const runtime = getRuntime();
-    const sid = runtime.getContext().get<string>('edit:pending:active');
-    if (sid) { runtime.getEditPipeline().reject(sid, 'Rejected in view'); runtime.getContext().remove('edit:pending:active'); }
-    setStatusMsg('Proposal rejected.'); rerender();
-  };
-
-  const handleRevert = () => {
-    getRuntime().getContext().remove('edit:pending:active');
-    session.reset(); setEditingRange(null);
-    setStatusMsg('Reverted to original.'); rerender();
-  };
-
   /* ── derived data ── */
   const lineMetadata = useMemo(() => session.getLineMetadata(), [renderTick]);
   const diffResult = useMemo(() => session.getDiff(), [renderTick]);
@@ -254,7 +204,6 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
     background: 'var(--bg-secondary)', color: 'var(--text-primary)',
     cursor: 'pointer', fontSize: 12,
   };
-  const activeBtn: React.CSSProperties = { ...btnStyle, background: 'var(--accent)', color: '#fff' };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -280,10 +229,6 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
         padding: '4px 8px', borderBottom: '0.5px solid var(--border)',
         display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0,
       }}>
-        <button style={hasChanges ? activeBtn : btnStyle} onClick={handlePropose}>Propose</button>
-        <button style={btnStyle} onClick={handleApply}>Apply</button>
-        <button style={btnStyle} onClick={handleReject}>Reject</button>
-        <button style={btnStyle} onClick={handleRevert}>Revert</button>
         <div style={{ flex: 1 }} />
         <button style={btnStyle} onClick={() => {
           const next = !showDiff;
