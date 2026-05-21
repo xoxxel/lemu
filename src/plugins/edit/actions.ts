@@ -153,29 +153,34 @@ export const findAction: PluginAction = {
   id: 'find',
   type: 'edit-workflow',
   title: 'Find in document',
-  description: 'Search for text in the current document',
-  ownsInput: true,
+  description: 'Toggle interactive find mode. Owns plain-text input while active.',
   handler: async (ctx) => {
-    const appCtx = getRuntime().getContext();
+    const runtime = getRuntime();
+    const appCtx = runtime.getContext();
     const query = ctx.query.replace(/^find\s*/, '').trim();
-    const current = appCtx.get<boolean>('edit:search:mode') ?? false;
+    const subcommand = query.toLowerCase();
 
-    if (query) {
-      appCtx.set('edit:search:mode', true);
-      appCtx.set('action:suffix:find', '[on]');
+    if (subcommand === 'off') {
+      runtime.ownership.release('edit');
+      appCtx.set('edit:search:mode', false);
+      appCtx.set('action:suffix:find', '[off]');
+      return 'Find mode OFF';
+    }
+
+    if (runtime.ownership.isOwnedBy('edit')) {
+      return 'Tab already in find mode. Use >find off to exit.';
+    }
+
+    runtime.ownership.acquire('edit', 'find', 'edit-workflow', ctx.tabId);
+    appCtx.set('edit:search:mode', true);
+    appCtx.set('action:suffix:find', '[on]');
+
+    if (query && subcommand !== 'on') {
       appCtx.set('edit:search:execute', query);
-      return `Searching for "${query}"`;
+      return `Find mode ON — searching for "${query}"`;
     }
 
-    const next = !current;
-    appCtx.set('edit:search:mode', next);
-    appCtx.set('action:suffix:find', next ? '[on]' : '[off]');
-
-    if (!next) {
-      getRuntime().ownership.release();
-    }
-
-    return `Search ${next ? 'enabled' : 'disabled'}`;
+    return 'Find mode ON — type a search query';
   },
 };
 

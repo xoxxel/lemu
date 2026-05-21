@@ -19,8 +19,6 @@ export const replaceAction: PluginAction = {
       appCtx.set('edit:search:mode', false);
       appCtx.set('edit:search:execute', '');
       appCtx.set('action:suffix:replace', undefined);
-      const s = appCtx.get<any>('edit:session');
-      if (s && typeof s.clearSearch === 'function') s.clearSearch();
       appCtx.set('edit:replace:event', { type: 'mode_exited', text: 'Replace mode deactivated' });
       return 'Replace mode OFF';
     }
