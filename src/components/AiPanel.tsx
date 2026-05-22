@@ -1,6 +1,7 @@
-import { useState, useSyncExternalStore, useRef, useEffect } from 'react';
+import { useState, useSyncExternalStore, useRef, useCallback } from 'react';
 import { getRuntime } from '../core/runtime/instance';
 import type { AiGeneratedPatch } from '../core/coder/session';
+import { Typewriter } from './Typewriter';
 
 interface AiPanelProps {
   state: Record<string, unknown>;
@@ -26,6 +27,20 @@ export function AiPanel({ state: _state }: AiPanelProps) {
   const aiMode = appCtx.get<boolean>('edit:ai:active') ?? false;
   const messages = appCtx.get<Array<{ role: string; content: string; patches?: unknown[] }>>('edit:ai:messages') ?? [];
   const patches = appCtx.get<Array<{ range: { start: number; end: number }; oldText: string; newText: string; state?: string }>>('edit:ai:patches') ?? [];
+
+  /* ── thinking state: AI is processing when the last message is from user ── */
+  const thinking = aiMode && messages.length > 0 && messages[messages.length - 1].role === 'user';
+
+  /* ── typewriter: track which assistant messages have finished typing ── */
+  const [completedSet, setCompletedSet] = useState<Set<number>>(() => new Set());
+  const completedRef = useRef(completedSet);
+  completedRef.current = completedSet;
+
+  const handleTypewriterComplete = useCallback((msgIndex: number) => {
+    const next = new Set(completedRef.current);
+    next.add(msgIndex);
+    setCompletedSet(next);
+  }, []);
 
   /* If no session and no AI mode, show idle */
   if (!session && !aiMode) {
@@ -68,8 +83,14 @@ export function AiPanel({ state: _state }: AiPanelProps) {
           {messages.map((msg, i) => (
             <div key={i} className={`ai-msg ai-msg-${msg.role}`}>
               <div className="ai-msg-header">{msg.role === 'user' ? 'You' : 'AI'}</div>
-              <div className="ai-msg-content">{msg.content}</div>
-              {msg.patches && Array.isArray(msg.patches) && msg.patches.length > 0 && (
+              <div className="ai-msg-content">
+                {msg.role === 'assistant' && i === messages.length - 1 && msg.content && !completedSet.has(i) ? (
+                  <Typewriter text={msg.content} speed={18} onComplete={() => handleTypewriterComplete(i)} />
+                ) : (
+                  msg.content
+                )}
+              </div>
+              {completedSet.has(i) && msg.patches && Array.isArray(msg.patches) && msg.patches.length > 0 && (
                 <div className="ai-msg-patches">
                   {(msg.patches as unknown[]).map((p: unknown, j) => {
                     const patch = p as { range: { start: number; end: number }; oldText: string; newText: string };
@@ -84,6 +105,7 @@ export function AiPanel({ state: _state }: AiPanelProps) {
               )}
             </div>
           ))}
+          {thinking && <div className="lemu-thinking">thinking</div>}
         </div>
         <div className="ai-panel-footer">
           <span className="ai-panel-hint">Prompts via input bar &bull; <kbd>&gt;accept n</kbd> &bull; <kbd>&gt;reject n</kbd></span>

@@ -892,6 +892,23 @@
   font-size: 12px;
 }
 
+.lemu-thinking {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--lemu-text-dim);
+  letter-spacing: 0.05em;
+  padding: 8px;
+}
+
+.lemu-thinking::after {
+  content: '\258B';
+  animation: lemu-blink 1s step-end infinite;
+}
+
+@keyframes lemu-blink {
+  50% { opacity: 0; }
+}
+
 .ai-panel-idle {
   color: var(--text-muted);
   font-style: italic;
