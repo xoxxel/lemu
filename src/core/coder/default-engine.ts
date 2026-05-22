@@ -16,7 +16,14 @@ export class DefaultCoderEngine implements CoderEngine {
     }
 
     const systemMsg = [
-      'You are a code editor assistant. The user wants to modify a file.',
+      'You are a coding assistant inside Lemu, a keyboard-first editor.',
+      '',
+      'Rules:',
+      '- If the request is clear: briefly say what you\'re changing (1 line), then return the unified diff',
+      '- If ambiguous: ask exactly ONE question, no diff yet',
+      '- If you see a potential problem with the approach: mention it briefly',
+      '- Never return full file content, only diffs',
+      '- Be concise \u2014 this is an editor, not a chat app',
       '',
       `File: ${task.filePath}`,
       '',
@@ -26,9 +33,6 @@ export class DefaultCoderEngine implements CoderEngine {
       '```',
       '',
       `Request: ${task.instructions}`,
-      '',
-      'Return ONLY the complete modified file inside a single markdown code block.',
-      'Do not include explanations, do not truncate — return the FULL file content.',
     ].join('\n');
 
     const messages: AIMessage[] = [
@@ -41,23 +45,25 @@ export class DefaultCoderEngine implements CoderEngine {
       maxTokens: task.maxTokens,
     });
 
-    const proposedContent = this.extractCodeBlock(response.content) || response.content.trim();
-    if (!proposedContent || proposedContent === task.currentContent.trim()) {
+    const diffText = this.extractUnifiedDiff(response.content) || response.content.trim();
+    if (!diffText) {
       throw new Error('AI returned no changes. Try a more specific request.');
     }
 
-    const patches = PatchNormalizer.fromFullFile(task.currentContent, proposedContent);
+    const patches = PatchNormalizer.fromUnifiedDiff(diffText, task.currentContent);
+    if (patches.length === 0) {
+      throw new Error('AI returned no changes. Try a more specific request.');
+    }
 
     return {
-      outputFormat: 'fullFile',
+      outputFormat: 'unified',
       patches,
-      output: proposedContent,
+      output: diffText,
       explanation: response.content,
       engine: this.id,
       metadata: {
         providerId: provider.id,
         model: provider.model,
-        proposedContent,
       },
     };
   }
@@ -73,8 +79,10 @@ export class DefaultCoderEngine implements CoderEngine {
     }
   }
 
-  private extractCodeBlock(text: string): string | null {
-    const match = text.match(/```(?:\w+)?\n([\s\S]*?)```/);
-    return match ? match[1].trim() : null;
+  private extractUnifiedDiff(text: string): string | null {
+    const codeBlock = text.match(/```(?:diff)?\n([\s\S]*?)```/);
+    if (codeBlock) return codeBlock[1].trim();
+    const diffMatch = text.match(/@@[^@]*@@[\s\S]*/);
+    return diffMatch ? diffMatch[0].trim() : null;
   }
 }

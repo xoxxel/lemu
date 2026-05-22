@@ -198,9 +198,9 @@ export const editPlugin: Plugin = {
         });
 
         let patches: Array<{ range: { start: number; end: number }; oldText: string; newText: string }> = [];
-        if (result.outputFormat === 'patches' && result.patches) {
+        if ((result.outputFormat === 'patches' || result.outputFormat === 'unified') && result.patches) {
           patches = result.patches;
-        } else         if (result.outputFormat === 'fullFile' && result.output) {
+        } else if (result.outputFormat === 'fullFile' && result.output) {
           patches = PatchNormalizer.fromFullFile(currentContent, result.output);
         }
 

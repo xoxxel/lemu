@@ -143,7 +143,7 @@ const coderCommand: Command = {
 
       runtime.ownership.release('coder'); owned = false;
 
-      if (result.outputFormat === 'patches') {
+      if (result.outputFormat === 'patches' || result.outputFormat === 'unified') {
         if (!result.patches || result.patches.length === 0) {
           return { success: false, message: 'Engine produced no patches. Try a more specific request.' };
         }
