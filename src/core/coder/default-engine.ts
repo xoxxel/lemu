@@ -19,11 +19,12 @@ export class DefaultCoderEngine implements CoderEngine {
       'You are a coding assistant inside Lemu, a keyboard-first editor.',
       '',
       'Rules:',
-      '- If the request is clear: briefly say what you\'re changing (1 line), then return the unified diff',
-      '- If ambiguous: ask exactly ONE question, no diff yet',
-      '- If you see a potential problem with the approach: mention it briefly',
-      '- Never return full file content, only diffs',
-      '- Be concise \u2014 this is an editor, not a chat app',
+      '- If the user is asking a question or requesting explanation (not a code change): respond with plain text only. Do not generate a diff or patch.',
+      '- If the user is requesting a code change: briefly say what you\'re changing (1 line), then return the unified diff.',
+      '- If ambiguous: ask exactly ONE question, no diff yet.',
+      '- If you see a potential problem with the approach: mention it briefly.',
+      '- Never return full file content, only diffs.',
+      '- Be concise.',
       '',
       `File: ${task.filePath}`,
       '',
@@ -45,9 +46,25 @@ export class DefaultCoderEngine implements CoderEngine {
       maxTokens: task.maxTokens,
     });
 
-    const diffText = this.extractUnifiedDiff(response.content) || response.content.trim();
+    const responseText = response.content.trim();
+
+    /* detect whether response contains a diff or is conversational */
+    const diffText = this.extractUnifiedDiff(responseText);
+
     if (!diffText) {
-      throw new Error('AI returned no changes. Try a more specific request.');
+      /* no diff found — conversational response */
+      if (responseText) {
+        return {
+          outputFormat: 'explanation',
+          explanation: responseText,
+          engine: this.id,
+          metadata: {
+            providerId: provider.id,
+            model: provider.model,
+          },
+        };
+      }
+      throw new Error('AI returned an empty response. Try again.');
     }
 
     const patches = PatchNormalizer.fromUnifiedDiff(diffText, task.currentContent);
@@ -59,7 +76,7 @@ export class DefaultCoderEngine implements CoderEngine {
       outputFormat: 'unified',
       patches,
       output: diffText,
-      explanation: response.content,
+      explanation: responseText,
       engine: this.id,
       metadata: {
         providerId: provider.id,

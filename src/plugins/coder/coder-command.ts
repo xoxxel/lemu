@@ -155,6 +155,8 @@ const coderCommand: Command = {
         if (result.patches.length === 0) {
           return { success: false, message: 'Engine returned no changes. Try a more specific request.' };
         }
+      } else if (result.outputFormat === 'explanation') {
+        return { success: true, message: result.explanation ?? '' };
       } else {
         return { success: false, message: `Engine returned unsupported output format: '${result.outputFormat}'` };
       }

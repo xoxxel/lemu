@@ -197,6 +197,13 @@ export const editPlugin: Plugin = {
           maxTokens: engineSettings.maxTokens,
         });
 
+        /* conversational response — no diff/patches expected */
+        if (result.outputFormat === 'explanation') {
+          messages.push({ role: 'assistant', content: result.explanation ?? '' });
+          appCtx.set('edit:ai:messages', messages);
+          return { message: result.explanation ?? '' };
+        }
+
         let patches: Array<{ range: { start: number; end: number }; oldText: string; newText: string }> = [];
         if ((result.outputFormat === 'patches' || result.outputFormat === 'unified') && result.patches) {
           patches = result.patches;
