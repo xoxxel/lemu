@@ -168,27 +168,45 @@ const aiAcceptAction: PluginAction = {
   handler: acceptPatch,
 };
 
+// [HIDDEN FROM DROPDOWN]
+// This action is hidden from UI pending review.
+// Handler is intact and must not be modified.
+// Needs: audit whether this can be removed,
+//        replaced, or consolidated before next cleanup phase.
 const aiRejectAction: PluginAction = {
   id: 'reject-patch',
   type: 'edit-workflow',
   title: 'Reject AI Patch',
   description: 'Reject a generated AI patch by index. Usage: >reject-patch <n>',
+  hidden: true,
   handler: rejectPatch,
 };
 
+// [HIDDEN FROM DROPDOWN]
+// This action is hidden from UI pending review.
+// Handler is intact and must not be modified.
+// Needs: audit whether this can be removed,
+//        replaced, or consolidated before next cleanup phase.
 const aiApplyAction: PluginAction = {
   id: 'apply-patches',
   type: 'edit-workflow',
   title: 'Apply Accepted Patches',
   description: 'Apply all accepted AI patches to the file',
+  hidden: true,
   handler: applyPatches,
 };
 
+// [HIDDEN FROM DROPDOWN]
+// This action is hidden from UI pending review.
+// Handler is intact and must not be modified.
+// Needs: audit whether this can be removed,
+//        replaced, or consolidated before next cleanup phase.
 const nextPatchAction: PluginAction = {
   id: 'next patch',
   type: 'edit-workflow',
   title: 'Next Patch',
   description: 'Navigate to the next patch in the editor',
+  hidden: true,
   handler: async () => {
     const appCtx = getRuntime().getContext();
     const patches = readPatches();
@@ -200,11 +218,17 @@ const nextPatchAction: PluginAction = {
   },
 };
 
+// [HIDDEN FROM DROPDOWN]
+// This action is hidden from UI pending review.
+// Handler is intact and must not be modified.
+// Needs: audit whether this can be removed,
+//        replaced, or consolidated before next cleanup phase.
 const prevPatchAction: PluginAction = {
   id: 'prev patch',
   type: 'edit-workflow',
   title: 'Previous Patch',
   description: 'Navigate to the previous patch in the editor',
+  hidden: true,
   handler: async () => {
     const appCtx = getRuntime().getContext();
     const patches = readPatches();

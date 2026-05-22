@@ -29,11 +29,17 @@ function parseRange(input: string): { start: number; end: number } | null {
   return null;
 }
 
+// [HIDDEN FROM DROPDOWN]
+// This action is hidden from UI pending review.
+// Handler is intact and must not be modified.
+// Needs: audit whether this can be removed,
+//        replaced, or consolidated before next cleanup phase.
 export const focusAction: PluginAction = {
   id: 'focus',
   type: 'edit-workflow',
   title: 'Focus line/range',
   description: 'Focus a line or range (e.g. >10 or >10 15)',
+  hidden: true,
   handler: async (ctx) => {
     const range = parseRange(ctx.query);
     if (!range) return `Could not parse range: "${ctx.query}". Usage: >10 or >10 15`;
@@ -45,11 +51,17 @@ export const focusAction: PluginAction = {
   },
 };
 
+// [HIDDEN FROM DROPDOWN]
+// This action is hidden from UI pending review.
+// Handler is intact and must not be modified.
+// Needs: audit whether this can be removed,
+//        replaced, or consolidated before next cleanup phase.
 export const proposeAction: PluginAction = {
   id: 'propose',
   type: 'edit-workflow',
   title: 'Propose changes',
   description: 'Generate diff from current content vs original',
+  hidden: true,
   handler: async (ctx) => {
     const { tabState, tabId } = ctx;
     const original = tabState.originalContent as string;

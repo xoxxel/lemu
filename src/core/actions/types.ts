@@ -21,5 +21,7 @@ export interface PluginAction {
   /** Ownership action: takes ownership of subsequent plain-text input.
    *  Root prefixes (/, :, @, >, *>) are NOT owned and always resolve normally. */
   ownsInput?: boolean
+  /** Hidden from autocomplete dropdown but still functional when typed directly. */
+  hidden?: boolean
   handler: (ctx: ActionContext) => string | Promise<string>
 }

@@ -34,6 +34,7 @@ export function useAutocomplete(scope: CommandScope, activePlugin: { id: string;
     if (input.startsWith('*>')) {
       const query = input.replace(/^\*>/, '').trim();
       const acts = runtime.actionRegistry.getGlobal().filter(a => {
+        if (a.hidden) return false;
         if (!query) return true;
         const q = query.toLowerCase();
         return a.id.toLowerCase().includes(q) || a.title?.toLowerCase().includes(q);
@@ -71,6 +72,7 @@ export function useAutocomplete(scope: CommandScope, activePlugin: { id: string;
       const tabType = activePlugin.views?.[0]?.type;
       if (!tabType) { setSuggestions([]); setStatusText(null); return; }
       const acts = runtime.actionRegistry.getScoped(tabType).filter(a => {
+        if (a.hidden) return false;
         if (!query) return true;
         const q = query.toLowerCase();
         return a.id.toLowerCase().includes(q) || a.title?.toLowerCase().includes(q);
