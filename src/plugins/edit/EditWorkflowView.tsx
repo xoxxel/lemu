@@ -214,33 +214,38 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
 
   /* ── styles ── */
   const btnStyle: React.CSSProperties = {
-    padding: '4px 12px', border: '0.5px solid var(--border)', borderRadius: 4,
-    background: 'var(--bg-secondary)', color: 'var(--text-primary)',
+    padding: '4px 12px', border: '1px solid var(--lemu-border)',
+    background: 'var(--lemu-bg-panel)', color: 'var(--lemu-text)',
     cursor: 'pointer', fontSize: 12,
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <header style={{
-        padding: '8px 16px', borderBottom: '0.5px solid var(--border)',
-        background: 'var(--bg-secondary)', fontSize: 12,
+        padding: '8px 16px', borderBottom: '1px solid var(--lemu-border)',
+        background: 'var(--lemu-bg-panel)', fontSize: 12,
         display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
       }}>
-        <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--lemu-text-dim)' }}>
           {(state as Record<string, string>).path ?? ''}
         </span>
+        {aiActive && <span style={{
+          fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '1px',
+          color: 'var(--lemu-blue)', textTransform: 'uppercase',
+          borderLeft: '1px solid var(--lemu-blue)', paddingLeft: 8,
+        }}>AI MODE</span>}
         {editingRange && (
-          <span style={{ fontSize: 11, color: '#ff9800' }}>
+          <span style={{ fontSize: 11, color: 'var(--lemu-yellow)' }}>
             L{editingRange.start}{editingRange.end !== editingRange.start ? `-${editingRange.end}` : ''}
           </span>
         )}
-        <span style={{ marginLeft: 'auto', color: hasChanges ? 'var(--accent)' : 'var(--text-muted)', fontSize: 11 }}>
+        <span style={{ marginLeft: 'auto', color: hasChanges ? 'var(--lemu-blue)' : 'var(--lemu-text-dim)', fontSize: 11 }}>
           {hasChanges ? 'modified' : 'unchanged'}
         </span>
       </header>
 
       <div style={{
-        padding: '4px 8px', borderBottom: '0.5px solid var(--border)',
+        padding: '4px 8px', borderBottom: '1px solid var(--lemu-border)',
         display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0,
       }}>
         <div style={{ flex: 1 }} />
@@ -252,13 +257,14 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
         }}>
           {showDiff ? 'Editor' : 'Diff'}
         </button>
-        {statusMsg && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>{statusMsg}</span>}
+        {statusMsg && <span style={{ fontSize: 11, color: 'var(--lemu-text-dim)', marginLeft: 8 }}>{statusMsg}</span>}
       </div>
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         <div ref={codeScrollRef} style={{
           flex: showDiff ? '0 0 70%' : '1 1 100%', overflow: 'auto',
-          background: 'var(--bg-primary)', position: 'relative',
+          background: 'var(--lemu-bg)', position: 'relative',
+          borderLeft: aiActive ? '1px solid var(--lemu-blue)' : 'none',
         }}>
           {editingRange ? (
             <RangeCodeView lineMetadata={lineMetadata} range={editingRange} rangeMountRef={rangeMountRef} />
@@ -273,23 +279,24 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
           <div style={{
             flex: '0 0 30%', overflow: 'auto', padding: 8,
             fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.5,
-            background: 'var(--bg-primary)',
+            background: 'var(--lemu-bg)',
+            borderLeft: '1px solid var(--lemu-border)',
           }}>
             {!hasChanges ? (
-              <div style={{ color: 'var(--text-muted)', padding: 16, textAlign: 'center' }}>
+              <div style={{ color: 'var(--lemu-text-dim)', padding: 16, textAlign: 'center' }}>
                 No changes — edit the content on the left
               </div>
             ) : (
-              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
                 {diffResult.hunks.map((hunk, i) => (
                   <div key={i}>
-                    <div style={{ color: 'var(--text-muted)', padding: '2px 0', fontSize: 11 }}>
+                    <div style={{ color: 'var(--lemu-text-dim)', padding: '2px 0', fontSize: 11 }}>
                       @@ -{hunk.origStart},{hunk.origCount} +{hunk.newStart},{hunk.newCount} @@
                     </div>
                     {hunk.lines.map((line, j) => (
                       <div key={j} style={{
-                        background: line.type === 'added' ? 'rgba(0,200,83,0.1)' : line.type === 'removed' ? 'rgba(255,23,68,0.1)' : 'transparent',
-                        color: line.type === 'added' ? '#00c853' : line.type === 'removed' ? '#ff1744' : 'var(--text-primary)',
+                        background: line.type === 'added' ? 'var(--lemu-dim-green)' : line.type === 'removed' ? 'var(--lemu-dim-red)' : 'transparent',
+                        color: line.type === 'added' ? 'var(--lemu-green)' : line.type === 'removed' ? 'var(--lemu-red)' : 'var(--lemu-text)',
                         padding: '0 8px',
                       }}>
                         {line.type === 'added' ? '+' : line.type === 'removed' ? '-' : ' '} {line.content}
@@ -333,11 +340,15 @@ function CM6PatchView({ session, appCtx }: { session: CMEditorSession; appCtx: A
             '.cm-scroller': { fontFamily: 'var(--font-mono)', fontSize: '13px', lineHeight: '20px', overflow: 'auto' },
             '.cm-content': { padding: '8px 0', caretColor: 'transparent' },
             '.cm-line': { padding: '0', minHeight: '20px' },
-            '.cm-gutters': { backgroundColor: 'transparent', borderRight: '0.5px solid var(--border)', fontSize: 11, color: 'var(--text-muted)' },
+            '.cm-gutters': { backgroundColor: 'transparent', borderRight: '1px solid var(--lemu-border)', fontSize: 11, color: 'var(--lemu-text-dim)' },
             '.cm-activeLine': { backgroundColor: 'transparent !important' },
             '&.cm-focused': { outline: 'none !important' },
             '.cm-selectionBackground': { background: 'transparent !important' },
             '.cm-cursor': { visibility: 'hidden' },
+            '& .cm-selectionLayer .cm-selectionBackground': { background: 'transparent !important' },
+            '&.cm-focused .cm-selectionLayer .cm-selectionBackground': { background: 'transparent !important' },
+            '& .cm-activeLine': { backgroundColor: 'transparent !important' },
+            '&.cm-focused .cm-activeLine': { backgroundColor: 'transparent !important' },
           }),
         ],
       }),
@@ -444,14 +455,14 @@ function RangeCodeView({ lineMetadata, range, rangeMountRef }: {
       <div style={{ display: 'flex' }}>
         <div style={{
           textAlign: 'right', width: 48, paddingRight: 12, userSelect: 'none',
-          fontSize: 11, color: 'var(--text-muted)', lineHeight: '20px', flexShrink: 0,
+          fontSize: 11, color: 'var(--lemu-text-dim)', lineHeight: '20px', flexShrink: 0,
         }}>
           {Array.from({ length: range.end - range.start + 1 }, (_, i) => (
             <div key={range.start + i}>{range.start + i}</div>
           ))}
         </div>
         <div style={{ flex: 1, minHeight: 40, padding: 6 }}>
-          <div ref={rangeMountRef} style={{ width: '100%', minHeight: 28, borderRadius: 6, background: 'rgba(255,152,0,0.02)', boxShadow: 'inset 0 0 0 1px rgba(255,152,0,0.03)' }} />
+          <div ref={rangeMountRef} style={{ width: '100%', minHeight: 28, border: '1px solid var(--lemu-border-focus)' }} />
         </div>
       </div>
       {after.map(ls => <LineRow key={ls.lineNumber} state={ls} />)}
@@ -480,9 +491,8 @@ function renderHighlightedContent(content: string, highlights: { start: number; 
 
     segments.push(
       <mark key={`m-${h.start}`} style={{
-        background: 'rgba(255, 200, 0, 0.4)',
-        color: 'inherit',
-        borderRadius: 2,
+        background: 'var(--lemu-yellow)',
+        color: '#0e0e0e',
         padding: '0 1px',
       }}>
         {content.slice(h.start, h.end)}
@@ -504,20 +514,20 @@ function LineRow({ state }: { state: LineState }) {
   let background = 'transparent';
 
   if (state.isActiveSearchMatch) {
-    gutterColor = '#e6a817';
-    background = 'rgba(255, 200, 0, 0.08)';
+    gutterColor = 'var(--lemu-blue)';
+    background = 'var(--lemu-dim-blue)';
   } else if (state.isSearchMatch) {
-    gutterColor = '#e6a817';
-    background = 'rgba(255, 200, 0, 0.04)';
+    gutterColor = 'var(--lemu-yellow)';
+    background = 'var(--lemu-dim-yellow)';
   } else if (state.isModified) {
-    gutterColor = '#ff9800';
-    background = 'rgba(255, 152, 0, 0.04)';
+    gutterColor = 'var(--lemu-yellow)';
+    background = 'transparent';
   } else if (state.isInserted) {
-    gutterColor = '#00c853';
-    background = 'rgba(0, 200, 83, 0.04)';
+    gutterColor = 'var(--lemu-green)';
+    background = 'var(--lemu-dim-green)';
   } else if (state.isDeleted) {
-    gutterColor = '#ff1744';
-    background = 'rgba(255, 23, 68, 0.04)';
+    gutterColor = 'var(--lemu-red)';
+    background = 'var(--lemu-dim-red)';
   }
 
   const content = state.searchHighlights?.length
@@ -529,16 +539,16 @@ function LineRow({ state }: { state: LineState }) {
       <div style={{ width: 3, flexShrink: 0, background: gutterColor }} />
       <span style={{
         display: 'inline-block', width: 45, textAlign: 'right', paddingRight: 12,
-        color: state.isActiveSearchMatch ? '#e6a817' : state.isActiveRange ? '#ff9800' : 'var(--text-muted)',
+        color: state.isActiveSearchMatch ? 'var(--lemu-blue)' : state.isActiveRange ? 'var(--lemu-yellow)' : 'var(--lemu-text-dim)',
         userSelect: 'none', fontSize: 11, lineHeight: '20px', flexShrink: 0,
       }}>
         {state.lineNumber}
       </span>
       <span style={{
         whiteSpace: 'pre', fontFamily: 'var(--font-mono)', fontSize: 13,
-        lineHeight: '20px', color: 'var(--text-primary)',
+        lineHeight: '20px', color: 'var(--lemu-text)',
       }}>
-        {state.isActiveSearchMatch ? <>{content}<span style={{ color: '#e6a817' }}>  {'←'}</span></> : content}
+        {state.isActiveSearchMatch ? <>{content}<span style={{ color: 'var(--lemu-blue)' }}>  {'←'}</span></> : content}
       </span>
     </div>
   );

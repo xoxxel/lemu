@@ -31,6 +31,25 @@
   --syntax-tag: #6a8ba8;
   --syntax-attr: #8a9a6a;
   --syntax-punctuation: #666666;
+
+  /* ── lemu design tokens ── */
+  --lemu-bg:          #0e0e0e;
+  --lemu-bg-panel:    #141414;
+  --lemu-bg-hover:    #1c1c1c;
+  --lemu-bg-active:   #222222;
+  --lemu-text:        #e8e8e8;
+  --lemu-text-dim:    #666666;
+  --lemu-text-muted:  #444444;
+  --lemu-border:      #2a2a2a;
+  --lemu-border-focus:#555555;
+  --lemu-green:       #4ec994;
+  --lemu-red:         #e06c75;
+  --lemu-blue:        #61afef;
+  --lemu-yellow:      #e5c07b;
+  --lemu-dim-green:   #1a3d2b;
+  --lemu-dim-red:     #3d1a1a;
+  --lemu-dim-blue:    #1a2a3d;
+  --lemu-dim-yellow:  #3d3a1a;
 }
 
 html, body, #root {
