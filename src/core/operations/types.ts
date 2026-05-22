@@ -28,6 +28,7 @@ export interface RangeEditArgs {
 
 export interface AiTransformArgs {
   prompt: string;
+  patches: Patch[];
   selectedRange?: { start: number; end: number };
 }
 

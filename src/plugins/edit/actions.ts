@@ -1,6 +1,10 @@
 import type { PluginAction } from '../../core/actions/types';
+import type { Patch } from '../../core/operations/types';
 import { getRuntime } from '../../core/runtime/instance';
+import { PatchNormalizer } from '../../core/coder/patch-normalizer';
+import { eventBus } from '../../core/events';
 import { replaceAction } from './replace-action';
+import { rejectPatch as aiRejectPatch, applyPatches as aiApplyPatches } from './ai-mode-actions';
 
 function getPendingKey(tabId: string): string {
   return `edit:pending:${tabId}`;
@@ -76,23 +80,54 @@ export const applyAction: PluginAction = {
   id: 'apply',
   type: 'edit-workflow',
   title: 'Apply changes',
-  description: 'Write proposed changes to disk',
+  description: 'Write proposed changes to disk via transaction pipeline',
   handler: async (ctx) => {
-    const { tabId } = ctx;
     const runtime = getRuntime();
     const appCtx = runtime.getContext();
+
+    /* delegate to AI patch apply when AI mode is active */
+    if (appCtx.get<boolean>('edit:ai:active')) {
+      return aiApplyPatches(ctx);
+    }
+
+    const { tabId } = ctx;
     const suggestionId = appCtx.get<string>(getPendingKey(tabId!));
     if (!suggestionId) return 'No pending proposal. Use >propose first.';
 
     const pipeline = runtime.getEditPipeline();
-    const result = await pipeline.approve(suggestionId);
-    if (!result) return 'Suggestion not found or already processed.';
+    const suggestion = await pipeline.approve(suggestionId);
+    if (!suggestion) return 'Suggestion not found or already processed.';
+
+    const patches = PatchNormalizer.fromFullFile(suggestion.originalContent, suggestion.proposedContent);
+
+    if (patches.length === 0) {
+      return 'No changes detected in approved proposal.';
+    }
+
+    const opResult = await runtime.operations.run(
+      {
+        type: 'aiTransform',
+        scope: { type: 'document' },
+        args: { prompt: 'edit-apply', patches },
+      },
+      {
+        document: suggestion.originalContent,
+        path: suggestion.filePath,
+        state: {},
+      },
+    );
+
+    if (!opResult.success) {
+      return `Transaction failed: ${opResult.error || 'unknown error'}. Changes not applied.`;
+    }
+
+    const newDocument = (opResult.metadata as Record<string, unknown>)?.newDocument as string || suggestion.proposedContent;
 
     try {
       const res = await fetch('/api/fs/write', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: result.filePath, content: result.proposedContent }),
+        body: JSON.stringify({ path: suggestion.filePath, content: newDocument }),
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error);
@@ -100,8 +135,17 @@ export const applyAction: PluginAction = {
       return `File write failed: ${err instanceof Error ? err.message : String(err)}`;
     }
 
+    if (opResult.transaction) {
+      eventBus.emit('transaction:committed', {
+        filePath: suggestion.filePath,
+        transactionId: opResult.transaction.id,
+        patches: opResult.transaction.patches,
+        inverse: opResult.transaction.inverse,
+      });
+    }
+
     appCtx.remove(getPendingKey(tabId!));
-    return `Applied changes to ${result.filePath}`;
+    return `Applied changes to ${suggestion.filePath} (${patches.length} patch${patches.length !== 1 ? 'es' : ''} committed)`;
   },
 };
 
@@ -111,9 +155,15 @@ export const rejectAction: PluginAction = {
   title: 'Reject changes',
   description: 'Discard the proposed changes',
   handler: async (ctx) => {
-    const { tabId } = ctx;
     const runtime = getRuntime();
     const appCtx = runtime.getContext();
+
+    /* delegate to AI patch reject when AI mode is active */
+    if (appCtx.get<boolean>('edit:ai:active')) {
+      return aiRejectPatch(ctx);
+    }
+
+    const { tabId } = ctx;
     const suggestionId = appCtx.get<string>(getPendingKey(tabId!));
     if (!suggestionId) return 'No pending proposal to reject.';
 

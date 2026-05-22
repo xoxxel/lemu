@@ -104,6 +104,10 @@ export const DomainEventTypes = {
   // Tab events
   TabActivated: 'tab:activated',
   TabStateChanged: 'tab:state-changed',
+
+  // AI session events
+  AiSessionStarted: 'ai:session-started',
+  AiSessionEnded: 'ai:session-ended',
 } as const;
 
 export type DomainEventType = (typeof DomainEventTypes)[keyof typeof DomainEventTypes];

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useSyncExternalStore } from 'react';
 import { parse } from './core/parser';
 import { classifyInput } from './core/input-router';
 import { getRuntime } from './core/runtime/instance';
@@ -18,6 +18,7 @@ import { createTabId } from './core/tabs/types';
 import type { FeedbackEvent } from './core/feedback/types';
 import Sidebar from './components/Sidebar';
 import Workspace from './components/Workspace';
+import { AiPanel } from './components/AiPanel';
 import InputBar from './components/InputBar';
 import type { InputMode } from './components/InputBar';
 import FeedbackBar from './components/FeedbackBar';
@@ -128,9 +129,10 @@ export default function App() {
   const activeTab = tabs.find((t) => t.id === activeTabId) || null;
   const activeTabType = tabs.find((t) => t.id === activeTabId)?.type ?? null;
   const prevEditorCtx = useRef<string>('');
-  if (activeTab?.type === 'editor') {
+  /* editorContext tracks the active tab's document — both 'editor' and 'edit-workflow' tabs */
+  if (activeTab && (activeTab.type === 'editor' || activeTab.type === 'edit-workflow')) {
     const s = activeTab.state as Record<string, unknown>;
-    const doc = (s.content as string) || '';
+    const doc = (s.content as string) || (s.currentContent as string) || '';
     if (prevEditorCtx.current !== doc) {
       prevEditorCtx.current = doc;
       getRuntime().editorContext.document = doc;
@@ -141,6 +143,21 @@ export default function App() {
   const activePlugin = activeTabType ? getRuntime().pluginRegistry.getPluginByTabType(activeTabType) : null;
   const { scope: activeScope } = resolveScope(inputValue, activePlugin);
   const { suggestions, selectedIndex, statusText, update: updateAutocomplete, clear: clearAutocomplete, selectNext, selectPrev, selectCurrent } = useAutocomplete(activeScope, activePlugin);
+
+  /* ── AI Panel visibility (session OR AI mode) ── */
+  const [aiPanelOpen, setAiPanelOpen] = useState(
+    () => getRuntime().aiSessions.hasActiveSession || getRuntime().getContext().get<boolean>('edit:ai:active') === true,
+  );
+  const _aiSessionTick = useSyncExternalStore(
+    (cb) => { const id = setInterval(cb, 200); return () => clearInterval(id); },
+    () => (getRuntime().aiSessions.hasActiveSession || getRuntime().getContext().get<boolean>('edit:ai:active') === true) ? 1 : 0,
+  );
+  if (!aiPanelOpen && (getRuntime().aiSessions.hasActiveSession || getRuntime().getContext().get<boolean>('edit:ai:active') === true)) {
+    setAiPanelOpen(true);
+  }
+  if (aiPanelOpen && !getRuntime().aiSessions.hasActiveSession && getRuntime().getContext().get<boolean>('edit:ai:active') !== true) {
+    setAiPanelOpen(false);
+  }
   const terminal = useTerminal();
 
   const addMessage = useCallback((type: Message['type'], content: string) => {
@@ -314,16 +331,26 @@ export default function App() {
       if (plugin?.onInput) {
         addMessage('user', trimmed);
         const tab = tabs.find(t => t.id === owner.tabId);
-        const result: PluginInputResult | void = await runtime.processPluginInput({
-          input: trimmed,
-          tabId: owner.tabId ?? '',
-          tabType: owner.tabType,
-          state: tab?.state ?? {},
-        });
-        if (result?.state) {
-          setTabs((prev) => prev.map((t) =>
-            t.id === owner.tabId ? { ...t, state: { ...t.state, ...result.state } } : t
-          ));
+        const prevInput = input;
+        addHistory(trimmed);
+        setInputValue('');
+        clearAutocomplete();
+        inputRef.current?.focus();
+        try {
+          const result: PluginInputResult | void = await runtime.processPluginInput({
+            input: trimmed,
+            tabId: owner.tabId ?? '',
+            tabType: owner.tabType,
+            state: tab?.state ?? {},
+          });
+          if (result?.state) {
+            setTabs((prev) => prev.map((t) =>
+              t.id === owner.tabId ? { ...t, state: { ...t.state, ...result.state } } : t
+            ));
+          }
+        } catch (err) {
+          setInputValue(prevInput);
+          addMessage('error', err instanceof Error ? err.message : String(err));
         }
         return;
       }
@@ -542,6 +569,12 @@ export default function App() {
       if (result.success && result.data && typeof result.data === 'object') {
         const d = result.data as Record<string, unknown>;
         const dType = d.type as string | undefined;
+
+        /* ── Open AI panel when /coder returns session data ── */
+        if (d.aiContext && typeof d.aiContext === 'object') {
+          setAiPanelOpen(true);
+        }
+
         if (dType && getRuntime().viewComponentMap[dType]) {
           if (activeTab && activeTab.type === dType) {
             setTabs((prev) => prev.map((t) =>
@@ -712,10 +745,13 @@ export default function App() {
             onClose={closeTab}
           />
         )}
-        <Workspace
-          ref={workspaceRef}
-          activeTab={activeTab}
-        />
+        <div className="editor-area">
+          <Workspace
+            ref={workspaceRef}
+            activeTab={activeTab}
+          />
+          {aiPanelOpen && <AiPanel state={{}} />}
+        </div>
         {terminal.sessions.length > 0 && (
           <div className={`terminal-panel ${terminalPanelOpen ? '' : 'collapsed'}`}>
             <div className="terminal-panel-header">

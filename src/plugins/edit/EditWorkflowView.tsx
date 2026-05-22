@@ -1,9 +1,22 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { EditorState } from '@codemirror/state';
+import { EditorView, lineNumbers } from '@codemirror/view';
 import { CMEditorSession } from '../../core/editor';
 import type { LineState } from '../../core/editor/line-metadata';
 import type { Range } from '../../core/editor/document';
 import { getRuntime } from '../../core/runtime/instance';
 import { pendingFocus } from './actions';
+import { AppContext } from '../../core/context/app-context';
+import {
+  setPatchesEffect,
+  setDiffVisibleEffect,
+  patchField,
+  patchClickHandler,
+  setPatchActionHandlers,
+  type PatchDecorationData,
+} from '../../editor/extensions/patch-decorations';
+import { patchTheme } from '../../editor/extensions/patch-theme';
+import { acceptPatchById, rejectPatchById } from './ai-mode-actions';
 
 const LINE_HEIGHT = 20;
 
@@ -29,9 +42,10 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
   const appCtx = getRuntime().getContext();
   appCtx.set('edit:session', session);
 
+  const aiActive = appCtx.get<boolean>('edit:ai:active') ?? false;
   const [renderTick, setRenderTick] = useState(0);
   const [statusMsg, setStatusMsg] = useState('');
-  const [showDiff, setShowDiff] = useState(() => appCtx.get<boolean>('edit:diffVisible') ?? true);
+  const [showDiff, setShowDiff] = useState(() => aiActive ? false : (appCtx.get<boolean>('edit:diffVisible') ?? true));
   const [editingRange, setEditingRange] = useState<Range | null>(session.activeRange);
   const codeScrollRef = useRef<HTMLDivElement>(null);
   const rangeMountRef = useRef<HTMLDivElement>(null) as React.RefObject<HTMLDivElement>;
@@ -107,8 +121,14 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
     if (appCtx.get<string>('action:suffix:find') === undefined) {
       appCtx.set('action:suffix:find', '[off]');
     }
+    if (appCtx.get<string>('action:suffix:ai') === undefined) {
+      appCtx.set('action:suffix:ai', '[off]');
+    }
     if (appCtx.get<boolean>('edit:search:mode') === undefined) {
       appCtx.set('edit:search:mode', false);
+    }
+    if (appCtx.get<boolean>('edit:ai:active') === undefined) {
+      appCtx.set('edit:ai:active', false);
     }
   }, []);
   useEffect(() => {
@@ -173,61 +193,19 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
         sessionRef.current.clearSearch();
         rerender();
       }),
+      appCtx.onChange('edit:ai:active', (_k, v) => {
+        if (v === false) {
+          // Clear AI messages and patches when exiting AI mode
+          appCtx.set('edit:ai:messages', []);
+          appCtx.set('edit:ai:patches', []);
+        }
+        rerender();
+      }),
     ];
     return () => us.forEach(u => u());
   }, [scrollToLine]);
 
   /* command handling moved to main app input via App.tsx; no internal input here */
-
-  /* ── workflow handlers ── */
-  const handlePropose = async () => {
-    const runtime = getRuntime();
-    const suggestion = await runtime.getEditPipeline().propose({
-      filePath: (state as Record<string, string>).path ?? '',
-      originalContent: session.originalContent,
-      proposedContent: session.content,
-      source: 'user',
-    });
-    runtime.getContext().set('edit:pending:active', suggestion.id);
-    setStatusMsg(`Proposed — ${suggestion.diff.slice(0, 200)}${suggestion.diff.length > 200 ? '...' : ''}`);
-    rerender();
-  };
-
-  const handleApply = async () => {
-    const runtime = getRuntime();
-    const sid = runtime.getContext().get<string>('edit:pending:active');
-    if (!sid) { setStatusMsg('No pending proposal.'); return; }
-    const result = await runtime.getEditPipeline().approve(sid);
-    if (!result) { setStatusMsg('Suggestion not found.'); return; }
-    try {
-      const res = await fetch('/api/fs/write', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: result.filePath, content: result.proposedContent }),
-      });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error);
-    } catch (err) {
-      setStatusMsg(`Write failed: ${err instanceof Error ? err.message : String(err)}`);
-      return;
-    }
-    runtime.getContext().remove('edit:pending:active');
-    setStatusMsg(`Applied to ${result.filePath}`);
-    rerender();
-  };
-
-  const handleReject = () => {
-    const runtime = getRuntime();
-    const sid = runtime.getContext().get<string>('edit:pending:active');
-    if (sid) { runtime.getEditPipeline().reject(sid, 'Rejected in view'); runtime.getContext().remove('edit:pending:active'); }
-    setStatusMsg('Proposal rejected.'); rerender();
-  };
-
-  const handleRevert = () => {
-    getRuntime().getContext().remove('edit:pending:active');
-    session.reset(); setEditingRange(null);
-    setStatusMsg('Reverted to original.'); rerender();
-  };
 
   /* ── derived data ── */
   const lineMetadata = useMemo(() => session.getLineMetadata(), [renderTick]);
@@ -240,7 +218,6 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
     background: 'var(--bg-secondary)', color: 'var(--text-primary)',
     cursor: 'pointer', fontSize: 12,
   };
-  const activeBtn: React.CSSProperties = { ...btnStyle, background: 'var(--accent)', color: '#fff' };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -266,10 +243,6 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
         padding: '4px 8px', borderBottom: '0.5px solid var(--border)',
         display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0,
       }}>
-        <button style={hasChanges ? activeBtn : btnStyle} onClick={handlePropose}>Propose</button>
-        <button style={btnStyle} onClick={handleApply}>Apply</button>
-        <button style={btnStyle} onClick={handleReject}>Reject</button>
-        <button style={btnStyle} onClick={handleRevert}>Revert</button>
         <div style={{ flex: 1 }} />
         <button style={btnStyle} onClick={() => {
           const next = !showDiff;
@@ -289,6 +262,8 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
         }}>
           {editingRange ? (
             <RangeCodeView lineMetadata={lineMetadata} range={editingRange} rangeMountRef={rangeMountRef} />
+          ) : aiActive ? (
+            <CM6PatchView session={session} appCtx={appCtx} />
           ) : (
             <ReadOnlyCodeView lineMetadata={lineMetadata} />
           )}
@@ -330,6 +305,117 @@ export function EditWorkflowView({ state }: { state: Record<string, unknown> }) 
 
     </div>
   );
+}
+
+/* ─── AI Mode CM6 Editor with inline patch decorations ─── */
+
+function CM6PatchView({ session, appCtx }: { session: CMEditorSession; appCtx: AppContext }) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<EditorView | null>(null);
+  const appCtxRef = useRef(appCtx);
+  appCtxRef.current = appCtx;
+
+  useEffect(() => {
+    if (!editorRef.current) return;
+    viewRef.current?.destroy();
+
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: session.content,
+        extensions: [
+          EditorState.readOnly.of(true),
+          lineNumbers(),
+          patchField,
+          patchClickHandler,
+          patchTheme,
+          EditorView.theme({
+            '&': { backgroundColor: 'transparent', height: '100%' },
+            '.cm-scroller': { fontFamily: 'var(--font-mono)', fontSize: '13px', lineHeight: '20px', overflow: 'auto' },
+            '.cm-content': { padding: '8px 0', caretColor: 'transparent' },
+            '.cm-line': { padding: '0', minHeight: '20px' },
+            '.cm-gutters': { backgroundColor: 'transparent', borderRight: '0.5px solid var(--border)', fontSize: 11, color: 'var(--text-muted)' },
+            '.cm-activeLine': { backgroundColor: 'transparent !important' },
+            '&.cm-focused': { outline: 'none !important' },
+            '.cm-selectionBackground': { background: 'transparent !important' },
+            '.cm-cursor': { visibility: 'hidden' },
+          }),
+        ],
+      }),
+      parent: editorRef.current,
+    });
+
+    viewRef.current = view;
+
+    /* dispatch existing patches to newly created editor */
+    const existing = appCtxRef.current.get<PatchEntry[]>('edit:ai:patches') ?? [];
+    if (existing.length > 0) {
+      view.dispatch({ effects: setPatchesEffect.of(toDecorationData(existing)) });
+    }
+
+    return () => {
+      view.destroy();
+      viewRef.current = null;
+    };
+  }, [session.content]);
+
+  /* subscribe to patch changes, diff toggle, and patch focus */
+  useEffect(() => {
+    setPatchActionHandlers(
+      (id) => { acceptPatchById(id).then(msg => appCtxRef.current.set('edit:ai:lastStatus', msg)); },
+      (id) => { rejectPatchById(id).then(msg => appCtxRef.current.set('edit:ai:lastStatus', msg)); },
+    );
+
+    const unsubPatches = appCtxRef.current.onChange('edit:ai:patches', (_k, value) => {
+      const patches = (value as PatchEntry[]) ?? [];
+      const v = viewRef.current;
+      if (v) {
+        v.dispatch({ effects: setPatchesEffect.of(toDecorationData(patches)) });
+      }
+    });
+
+    const unsubDiff = appCtxRef.current.onChange('edit:diffVisible', (_k, value) => {
+      const v = viewRef.current;
+      if (v) {
+        v.dispatch({ effects: setDiffVisibleEffect.of(value !== false) });
+      }
+    });
+
+    const unsubFocus = appCtxRef.current.onChange('edit:ai:patchFocus', (_k, value) => {
+      const patches = appCtxRef.current.get<PatchEntry[]>('edit:ai:patches');
+      const v = viewRef.current;
+      if (v && patches && typeof value === 'number' && value >= 0 && value < patches.length) {
+        const p = patches[value];
+        const line = v.state.doc.lineAt(Math.max(0, Math.min(p.range.start, v.state.doc.length)));
+        v.dispatch({
+          effects: EditorView.scrollIntoView(line.from, { y: 'center' }),
+        });
+      }
+    });
+
+    return () => {
+      setPatchActionHandlers(() => {}, () => {});
+      unsubPatches();
+      unsubDiff();
+      unsubFocus();
+    };
+  }, []);
+
+  return (
+    <div ref={editorRef} style={{ height: '100%', overflow: 'hidden' }} />
+  );
+}
+
+type PatchEntry = { range: { start: number; end: number }; oldText: string; newText: string; state?: string };
+
+function toDecorationData(patches: PatchEntry[]): PatchDecorationData[] {
+  return patches.map((p, i) => ({
+    id: i + 1,
+    from: p.range.start,
+    to: p.range.end,
+    oldText: p.oldText,
+    newText: p.newText,
+    state: (p.state as PatchDecorationData['state']) ?? 'pending',
+  }));
 }
 
 /* ─── Read-only code view ─── */

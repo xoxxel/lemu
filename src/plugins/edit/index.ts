@@ -5,10 +5,12 @@ import { editDefaultSettings, editSettingsSchema } from './settings';
 import { editCommand } from './edit-command';
 import { EditWorkflowView } from './EditWorkflowView';
 import { editWorkflowActions } from './actions';
+import { aiModeActions } from './ai-mode-actions';
 import { parseScopeWithDefault } from '../../core/operations/scope/parser';
 import { resolveScopeNode } from '../../core/operations/scope/resolver';
 import type { Operation, PipelineContext } from '../../core/operations/types';
 import type { CMEditorSession } from '../../core/editor';
+import { PatchNormalizer } from '../../core/coder/patch-normalizer';
 
 function countMatchesInRange(text: string, searchText: string, start: number, end: number): number {
   const lowerText = text.toLowerCase();
@@ -135,7 +137,7 @@ export const editPlugin: Plugin = {
   version: '0.1.0',
   description: 'Propose → diff → apply workflow for editing files',
   commands: [editCommand],
-  actions: editWorkflowActions,
+  actions: [...editWorkflowActions, ...aiModeActions],
   views: [
     {
       type: 'edit-workflow',
@@ -147,21 +149,91 @@ export const editPlugin: Plugin = {
     const runtime = getRuntime();
     const appCtx = runtime.getContext();
     const query = payload.input.trim();
-    const replaceMode = appCtx.get<boolean>('edit:replace:mode') ?? false;
 
+    /* ── Replace mode ── */
+    const replaceMode = appCtx.get<boolean>('edit:replace:mode') ?? false;
     if (replaceMode) {
       return handleReplaceInput(payload, runtime, appCtx, query);
     }
 
-    const searchMode = appCtx.get<boolean>('edit:search:mode') ?? false;
+    /* ── AI mode ── */
+    const aiMode = appCtx.get<boolean>('edit:ai:active') ?? false;
+    if (aiMode) {
+      if (!query) return { message: 'Enter a prompt for AI to generate edits.' };
 
-    if (!searchMode) return;
-    if (!query) {
-      return { message: 'Enter a search query to find text in the document.' };
+      const filePath = runtime.editorContext.path;
+      const currentContent = runtime.editorContext.document;
+      if (!filePath || !currentContent) {
+        return { message: 'No file open. Use /edit <filepath> first.' };
+      }
+
+      /* store prompt in message history */
+      const messages = appCtx.get<Array<{ role: string; content: string; patches?: unknown[] }>>('edit:ai:messages') ?? [];
+      messages.push({ role: 'user', content: query });
+      appCtx.set('edit:ai:messages', messages);
+
+      try {
+        const engineSettings = {
+          engineId: (appCtx.get('coder:engine') as string) || 'default',
+          providerId: appCtx.get('coder:provider') as string || undefined,
+          model: appCtx.get('coder:model') as string || undefined,
+          temperature: appCtx.get('coder:temperature') as number,
+          maxTokens: appCtx.get('coder:maxTokens') as number,
+        };
+
+        const engine = runtime.coderEngines.get(engineSettings.engineId) || runtime.coderEngines.getDefault();
+        if (!engine) return { message: 'No AI engine configured.' };
+
+        const available = await engine.isAvailable();
+        if (!available) return { message: `Engine '${engine.id}' is not available.` };
+
+        const result = await engine.generatePatches({
+          filePath,
+          instructions: query,
+          currentContent,
+          providerId: engineSettings.providerId,
+          model: engineSettings.model,
+          temperature: engineSettings.temperature,
+          maxTokens: engineSettings.maxTokens,
+        });
+
+        let patches: Array<{ range: { start: number; end: number }; oldText: string; newText: string }> = [];
+        if ((result.outputFormat === 'patches' || result.outputFormat === 'unified') && result.patches) {
+          patches = result.patches;
+        } else if (result.outputFormat === 'fullFile' && result.output) {
+          patches = PatchNormalizer.fromFullFile(currentContent, result.output);
+        }
+
+        if (patches.length === 0) {
+          messages.push({ role: 'assistant', content: 'No changes generated. Try a more specific request.' });
+          appCtx.set('edit:ai:messages', messages);
+          return { message: 'Engine produced no changes.' };
+        }
+
+        /* store patches in context for panel + accept/reject actions */
+        appCtx.set('edit:ai:patches', patches);
+        appCtx.set('edit:ai:lastResult', result);
+        appCtx.set('edit:ai:baseDocument', currentContent);
+
+        messages.push({ role: 'assistant', content: result.explanation || `Generated ${patches.length} patch(es).`, patches });
+        appCtx.set('edit:ai:messages', messages);
+
+        return { message: `Generated ${patches.length} patch(es). Use >accept <n> or >reject <n>.` };
+      } catch (err) {
+        const msg = `AI generation failed: ${err instanceof Error ? err.message : String(err)}`;
+        messages.push({ role: 'assistant', content: msg });
+        appCtx.set('edit:ai:messages', messages);
+        return { message: msg };
+      }
     }
 
-    appCtx.set('edit:search:execute', query);
-    return { message: `Searching for "${query}"` };
+    /* ── Search mode ── */
+    const searchMode = appCtx.get<boolean>('edit:search:mode') ?? false;
+    if (searchMode) {
+      if (!query) return { message: 'Enter a search query to find text in the document.' };
+      appCtx.set('edit:search:execute', query);
+      return { message: `Searching for "${query}"` };
+    }
   },
   manifest: editManifest,
   settings: editDefaultSettings,

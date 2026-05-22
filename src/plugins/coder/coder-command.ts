@@ -1,5 +1,8 @@
 import type { Command, AutocompleteItem } from '../../core/commands/types';
 import { getRuntime } from '../../core/runtime/instance';
+import { PatchNormalizer } from '../../core/coder/patch-normalizer';
+import { AISession, createAiGeneratedPatch } from '../../core/coder/session';
+import { eventBus } from '../../core/events';
 
 const api = {
   async readFile(path: string): Promise<string> {
@@ -38,9 +41,22 @@ function detectFilePath(args: string[]): { path: string | null; prompt: string }
   return { path: first, prompt: args.slice(1).join(' ') };
 }
 
-function extractCodeBlock(text: string): string | null {
-  const match = text.match(/```(?:\w+)?\n([\s\S]*?)```/);
-  return match ? match[1].trim() : null;
+function resolveEngineSettings(): {
+  engineId: string;
+  providerId?: string;
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+} {
+  const runtime = getRuntime();
+  const appCtx = runtime.getContext();
+  return {
+    engineId: (appCtx.get('coder:engine') as string) || 'default',
+    providerId: appCtx.get('coder:provider') as string || undefined,
+    model: appCtx.get('coder:model') as string || undefined,
+    temperature: appCtx.get('coder:temperature') as number,
+    maxTokens: appCtx.get('coder:maxTokens') as number,
+  };
 }
 
 const coderCommand: Command = {
@@ -55,7 +71,7 @@ const coderCommand: Command = {
   ],
   edgeCases: [
     { scenario: 'no file match', input: '/coder Add tests', expected: 'treated as question, not a file edit' },
-    { scenario: 'AI returns no code block', input: '/coder src/a.ts refactor', expected: 'error: AI did not return code' },
+    { scenario: 'engine returns no patches', input: '/coder src/a.ts refactor', expected: 'error: engine produced no changes' },
   ],
 
   async execute(args) {
@@ -65,11 +81,8 @@ const coderCommand: Command = {
     }
 
     const runtime = getRuntime();
-    const registry = runtime.getAIProviderRegistry();
-    const provider = registry.getDefaultProvider();
-    if (!provider) {
-      return { success: false, message: 'No AI provider configured. Set VITE_LEMU_AI_API_KEY or configure via /ai config.' };
-    }
+
+    let owned = false;
 
     try {
       let fileContent = '';
@@ -83,53 +96,112 @@ const coderCommand: Command = {
         }
       }
 
+      if (!filePath) {
+        return {
+          success: true,
+          message: 'Use /coder <filepath> <instructions> to edit a file.',
+          data: { type: 'ai', content: '' },
+        };
+      }
+
+      if (runtime.ownership.hasOwner() && !runtime.ownership.isOwnedBy('coder')) {
+        const owner = runtime.ownership.getOwner();
+        return { success: false, message: `Cannot run coder: '${owner?.pluginId}' holds ownership. Exit their mode first.` };
+      }
+
+      runtime.ownership.acquire('coder', 'coder-command', '', null);
+      owned = true;
+
+      const engineSettings = resolveEngineSettings();
+      const engine = runtime.coderEngines.get(engineSettings.engineId) || runtime.coderEngines.getDefault();
+      if (!engine) {
+        runtime.ownership.release('coder'); owned = false;
+        return { success: false, message: `No coding engine available. Configure via /coder settings.` };
+      }
+
+      const available = await engine.isAvailable();
+      if (!available) {
+        runtime.ownership.release('coder'); owned = false;
+        return { success: false, message: `Engine '${engine.id}' is not available. Check configuration.` };
+      }
+
       let workspaceContext = '';
       try {
         workspaceContext = await api.getWorkspaceTree();
       } catch {}
 
-      const isEditMode = filePath !== null;
-      const systemMsg = isEditMode
-        ? [
-          `You are a code editor assistant. The user wants to modify a file.`,
-          ``,
-          `File: ${filePath}`,
-          ``,
-          `Current content:`,
-          `\`\`\``,
-          fileContent || '(empty file)',
-          `\`\`\``,
-          ``,
-          `Request: ${prompt}`,
-          ``,
-          `Return ONLY the complete modified file inside a single markdown code block.`,
-          `Do not include explanations, do not truncate — return the FULL file content.`,
-        ].join('\n')
-        : [
-          `You are a code assistant. Answer the user's question about their workspace.`,
-          ``,
-          workspaceContext ? `Workspace tree:\n${workspaceContext}\n` : '',
-          `Question: ${prompt}`,
-        ].join('\n');
+      const result = await engine.generatePatches({
+        filePath,
+        instructions: prompt,
+        currentContent: fileContent,
+        workspaceContext,
+        providerId: engineSettings.providerId,
+        model: engineSettings.model,
+        temperature: engineSettings.temperature,
+        maxTokens: engineSettings.maxTokens,
+      });
 
-      const response = await provider.chat(
-        [{ role: 'system', content: systemMsg }],
-        { temperature: 0.3 },
+      runtime.ownership.release('coder'); owned = false;
+
+      if (result.outputFormat === 'patches' || result.outputFormat === 'unified') {
+        if (!result.patches || result.patches.length === 0) {
+          return { success: false, message: 'Engine produced no patches. Try a more specific request.' };
+        }
+      } else if (result.outputFormat === 'fullFile') {
+        if (!result.output) {
+          return { success: false, message: 'Engine returned no output. Try a more specific request.' };
+        }
+        result.patches = PatchNormalizer.fromFullFile(fileContent, result.output);
+        if (result.patches.length === 0) {
+          return { success: false, message: 'Engine returned no changes. Try a more specific request.' };
+        }
+      } else {
+        return { success: false, message: `Engine returned unsupported output format: '${result.outputFormat}'` };
+      }
+
+      if (!result.patches || result.patches.length === 0) {
+        return { success: false, message: 'Engine produced no changes. Try a more specific request.' };
+      }
+
+      const proposedContent = applyPatchesToString(fileContent, result.patches);
+
+      if (proposedContent === fileContent) {
+        return { success: false, message: 'Engine returned no changes. Try a more specific request.' };
+      }
+
+      /* ── Create AISession with patch dependency inference ── */
+      const patchesWithDeps = result.patches.map((p, i) => {
+        const dependsOn: string[] = [];
+        for (let j = 0; j < i; j++) {
+          const prev = result.patches![j];
+          if (p.range.start < prev.range.end && p.range.end > prev.range.start) {
+            dependsOn.push(`patch-${j}`);
+          }
+        }
+        return createAiGeneratedPatch(i, p, dependsOn.length > 0 ? dependsOn : undefined);
+      });
+      const aiPatches = patchesWithDeps;
+      const aiSession = AISession.create(
+        filePath,
+        prompt,
+        { content: fileContent, cursorPosition: runtime.editorContext.selection?.start },
+        aiPatches,
+        {
+          engineId: engine.id,
+          providerId: engineSettings.providerId,
+          model: engineSettings.model,
+          temperature: engineSettings.temperature,
+          maxTokens: engineSettings.maxTokens,
+          duration: 0,
+          outputFormat: result.outputFormat,
+        },
       );
-
-      if (!filePath) {
-        return {
-          success: true,
-          message: response.content || '(no response)',
-          data: { type: 'ai', content: response.content },
-        };
-      }
-
-      const proposedContent = extractCodeBlock(response.content) || response.content.trim();
-
-      if (!proposedContent || proposedContent === fileContent.trim()) {
-        return { success: false, message: 'AI returned no changes. Try a more specific request.' };
-      }
+      runtime.aiSessions.startSession(aiSession);
+      const appCtx = runtime.getContext();
+      appCtx.set('edit:ai:patches', result.patches);
+      appCtx.set('edit:ai:baseDocument', fileContent);
+      appCtx.set('edit:ai:lastResult', result);
+      appCtx.set('edit:ai:active', true);
 
       const pipeline = runtime.getEditPipeline();
       const suggestion = await pipeline.propose({
@@ -139,9 +211,16 @@ const coderCommand: Command = {
         source: 'ai-coder',
       });
 
+      eventBus.emit('ai:session-started', {
+        timestamp: Date.now(),
+        sessionId: aiSession.sessionId,
+        filePath,
+        patchCount: aiPatches.length,
+      });
+
       return {
         success: true,
-        message: `AI proposed changes for ${filePath}\n${suggestion.diff}`,
+        message: `AI proposed changes for ${filePath} (engine: ${result.engine})\n${suggestion.diff}\n\nUse >accept, >reject, >accept all to review patches.`,
         data: {
           type: 'edit-workflow',
           path: filePath,
@@ -149,7 +228,13 @@ const coderCommand: Command = {
           currentContent: proposedContent,
           editHistory: [],
           pendingSuggestionId: suggestion.id,
-          aiContext: { prompt, model: provider.id, suggestionId: suggestion.id },
+          aiContext: {
+            prompt,
+            engine: result.engine,
+            suggestionId: suggestion.id,
+            patches: result.patches,
+            sessionId: aiSession.sessionId,
+          },
         },
       };
     } catch (err) {
@@ -157,6 +242,10 @@ const coderCommand: Command = {
         success: false,
         message: `Coder error: ${err instanceof Error ? err.message : String(err)}`,
       };
+    } finally {
+      if (owned) {
+        try { runtime.ownership.release('coder'); } catch {}
+      }
     }
   },
 
@@ -177,5 +266,21 @@ const coderCommand: Command = {
     return null;
   },
 };
+
+function applyPatchesToString(document: string, patches: Array<{ range: { start: number; end: number }; oldText: string; newText: string }>): string {
+  const sorted = [...patches].sort((a, b) => a.range.start - b.range.start);
+  let result = '';
+  let lastEnd = 0;
+  for (const p of sorted) {
+    if (p.range.start < lastEnd) {
+      throw new Error(`Overlapping patches: ${JSON.stringify(p.range)} overlaps previous end ${lastEnd}`);
+    }
+    result += document.slice(lastEnd, p.range.start);
+    result += p.newText;
+    lastEnd = p.range.end;
+  }
+  result += document.slice(lastEnd);
+  return result;
+}
 
 export { coderCommand };

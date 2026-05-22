@@ -6,6 +6,9 @@ import http from 'http';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { setupWebSocket } from './ws';
+import { runAider, checkAiderAvailable } from './coder';
+import { writeAtomic, cleanupOrphanTempFiles } from './fs-atomic';
+import { addPendingEntry, removePendingEntry, getUnresolvedEntries, clearAllPending } from './pending-recovery';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -114,7 +117,7 @@ app.post('/api/fs/delete', async (req, res) => {
   }
 });
 
-// Write file
+// Write file (atomic with recovery tracking)
 app.post('/api/fs/write', async (req, res) => {
   try {
     const { path: filePath, content } = req.body;
@@ -127,8 +130,19 @@ app.post('/api/fs/write', async (req, res) => {
       return res.json({ success: false, error: 'Path outside workspace' });
     }
 
-    await fs.ensureDir(path.dirname(target));
-    await fs.writeFile(target, content, 'utf-8');
+    const txId = `tx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    await addPendingEntry(WORKSPACE, {
+      transactionId: txId,
+      filePath: filePath,
+      timestamp: Date.now(),
+      status: 'pending-write',
+    });
+
+    await writeAtomic(target, content);
+
+    await removePendingEntry(WORKSPACE, txId);
+
     res.json({ success: true });
   } catch (err) {
     res.json({ success: false, error: (err as Error).message });
@@ -290,10 +304,60 @@ app.get('/api/workspace', (req, res) => {
   });
 });
 
+// Aider coding engine endpoint
+app.post('/api/coder/generate', async (req, res) => {
+  try {
+    const { filePath, instructions, currentContent, providerId, model, temperature, maxTokens } = req.body;
+
+    if (!filePath || !instructions) {
+      return res.json({ success: false, error: 'filePath and instructions are required' });
+    }
+
+    const result = await runAider({
+      filePath,
+      instructions,
+      currentContent: currentContent || '',
+      providerId,
+      model,
+      temperature,
+      maxTokens,
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.json({
+      success: false,
+      patches: [],
+      error: `Aider route error: ${err instanceof Error ? err.message : String(err)}`,
+    });
+  }
+});
+
+app.get('/api/coder/health', async (_req, res) => {
+  const available = await checkAiderAvailable();
+  res.json({ available });
+});
+
 const server = http.createServer(app);
 setupWebSocket(server);
 
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
+  const cleaned = await cleanupOrphanTempFiles(WORKSPACE);
+  if (cleaned.length > 0) {
+    console.log(`[ATOMIC] Cleaned ${cleaned.length} orphan temp file(s)`);
+  }
+
+  const unresolved = await getUnresolvedEntries(WORKSPACE);
+  if (unresolved.length > 0) {
+    console.log(`[RECOVERY] ${unresolved.length} unresolved write(s) from previous session:`);
+    for (const entry of unresolved) {
+      console.log(`  ${entry.transactionId}: ${entry.filePath} @ ${new Date(entry.timestamp).toISOString()}`);
+    }
+    console.log(`[RECOVERY] Use clearAllPending() after manual verification, or ignore if writes completed.`);
+  } else {
+    console.log('[RECOVERY] No unresolved writes from previous session.');
+  }
+
   console.log(`lemu server running on http://localhost:${PORT}`);
   console.log(`Workspace: ${WORKSPACE}`);
 });
