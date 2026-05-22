@@ -1,3 +1,4 @@
  
  [X]edit
- [] 
+ [X]calculator
+ 
