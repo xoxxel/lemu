@@ -111,8 +111,19 @@ export class PluginLoader {
 
     if (plugin.actions) {
       for (const action of plugin.actions) {
-        const type = action.type || '*';
-        this.ctx.actions.register(type, action);
+        const actionType = action.type ?? '*';
+        if (actionType === '*') {
+          const viewTypes = plugin.views?.map((view) => view.type) ?? [];
+          if (viewTypes.length > 0) {
+            for (const viewType of viewTypes) {
+              this.ctx.actions.register(viewType, action);
+            }
+          } else {
+            this.ctx.actions.register('*', action);
+          }
+        } else {
+          this.ctx.actions.register(actionType, action);
+        }
       }
     }
 
