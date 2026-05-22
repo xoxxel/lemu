@@ -384,8 +384,10 @@ function CM6PatchView({ session, appCtx }: { session: CMEditorSession; appCtx: A
       const patches = appCtxRef.current.get<PatchEntry[]>('edit:ai:patches');
       const v = viewRef.current;
       if (v && patches && typeof value === 'number' && value >= 0 && value < patches.length) {
+        const p = patches[value];
+        const line = v.state.doc.lineAt(Math.max(0, Math.min(p.range.start, v.state.doc.length)));
         v.dispatch({
-          effects: EditorView.scrollIntoView(patches[value].range.start, { y: 'center' }),
+          effects: EditorView.scrollIntoView(line.from, { y: 'center' }),
         });
       }
     });

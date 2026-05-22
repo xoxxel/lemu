@@ -1,7 +1,7 @@
 import {
   Decoration, DecorationSet, EditorView, WidgetType,
 } from '@codemirror/view';
-import { StateField, StateEffect, type Range } from '@codemirror/state';
+import { StateField, StateEffect, type Text, type Range } from '@codemirror/state';
 
 export interface PatchDecorationData {
   id: number;
@@ -16,6 +16,7 @@ export const setPatchesEffect = StateEffect.define<PatchDecorationData[]>();
 export const setDiffVisibleEffect = StateEffect.define<boolean>();
 
 let diffVisible = true;
+let storedPatches: PatchDecorationData[] = [];
 
 type PatchActionFn = (id: number) => void;
 let currentAcceptFn: PatchActionFn = () => {};
@@ -59,10 +60,9 @@ class PatchWidget extends WidgetType {
     if (this.state === 'pending') {
       const actions = document.createElement('span');
       actions.className = 'cm-patch-actions';
-      actions.innerHTML = `
-        <span class="cm-patch-accept" data-id="${this.id}">accept[${this.id}]</span>
-        <span class="cm-patch-reject" data-id="${this.id}">reject[${this.id}]</span>
-      `;
+      actions.innerHTML =
+        '<span class="cm-patch-accept" data-id="' + this.id + '">accept[' + this.id + ']</span>' +
+        '<span class="cm-patch-reject" data-id="' + this.id + '">reject[' + this.id + ']</span>';
       wrap.appendChild(actions);
     }
 
@@ -72,27 +72,28 @@ class PatchWidget extends WidgetType {
   ignoreEvent() { return false; }
 }
 
-function buildDecorations(patches: PatchDecorationData[]): DecorationSet {
+function buildDecorations(patches: PatchDecorationData[], doc: Text): DecorationSet {
   if (!diffVisible) return Decoration.none;
 
   const decos: Range<Decoration>[] = [];
 
   for (const p of patches) {
+    const from = Math.max(0, Math.min(p.from, doc.length));
+    const to = Math.max(from, Math.min(p.to, doc.length));
+
     if (p.state === 'accepted') {
+      decos.push(Decoration.line({ attributes: { class: 'cm-patch-gutter-accepted' } }).range(from));
       decos.push(Decoration.replace({
         widget: new PatchWidget(p.id, p.oldText, p.newText, 'accepted'),
         block: true,
-      }).range(p.from, p.to));
+      }).range(from, to));
     } else if (p.state === 'rejected') {
-      decos.push(Decoration.replace({
-        widget: new PatchWidget(p.id, p.oldText, p.newText, 'rejected'),
-        block: true,
-      }).range(p.from, p.to));
+      // skip — editor returns to normal
     } else {
       decos.push(Decoration.replace({
         widget: new PatchWidget(p.id, p.oldText, p.newText, 'pending'),
         block: true,
-      }).range(p.from, p.to));
+      }).range(from, to));
     }
   }
 
@@ -104,11 +105,16 @@ export const patchField = StateField.define<DecorationSet>({
   update(decorations, tr) {
     for (const e of tr.effects) {
       if (e.is(setPatchesEffect)) {
-        return buildDecorations(e.value);
+        storedPatches = e.value;
+        return buildDecorations(storedPatches, tr.state.doc);
       }
       if (e.is(setDiffVisibleEffect)) {
         diffVisible = e.value;
         if (!diffVisible) return Decoration.none;
+        if (storedPatches.length > 0) {
+          return buildDecorations(storedPatches, tr.state.doc);
+        }
+        return Decoration.none;
       }
     }
     return decorations.map(tr.changes);
@@ -139,7 +145,8 @@ export const patchClickHandler = EditorView.domEventHandlers({
 export function scrollToPatch(view: EditorView, patches: PatchDecorationData[], index: number) {
   if (index < 0 || index >= patches.length) return;
   const p = patches[index];
+  const pos = Math.max(0, Math.min(p.from, view.state.doc.length));
   view.dispatch({
-    effects: EditorView.scrollIntoView(p.from, { y: 'center' }),
+    effects: EditorView.scrollIntoView(pos, { y: 'center' }),
   });
 }

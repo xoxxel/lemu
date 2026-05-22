@@ -331,16 +331,26 @@ export default function App() {
       if (plugin?.onInput) {
         addMessage('user', trimmed);
         const tab = tabs.find(t => t.id === owner.tabId);
-        const result: PluginInputResult | void = await runtime.processPluginInput({
-          input: trimmed,
-          tabId: owner.tabId ?? '',
-          tabType: owner.tabType,
-          state: tab?.state ?? {},
-        });
-        if (result?.state) {
-          setTabs((prev) => prev.map((t) =>
-            t.id === owner.tabId ? { ...t, state: { ...t.state, ...result.state } } : t
-          ));
+        const prevInput = input;
+        addHistory(trimmed);
+        setInputValue('');
+        clearAutocomplete();
+        inputRef.current?.focus();
+        try {
+          const result: PluginInputResult | void = await runtime.processPluginInput({
+            input: trimmed,
+            tabId: owner.tabId ?? '',
+            tabType: owner.tabType,
+            state: tab?.state ?? {},
+          });
+          if (result?.state) {
+            setTabs((prev) => prev.map((t) =>
+              t.id === owner.tabId ? { ...t, state: { ...t.state, ...result.state } } : t
+            ));
+          }
+        } catch (err) {
+          setInputValue(prevInput);
+          addMessage('error', err instanceof Error ? err.message : String(err));
         }
         return;
       }

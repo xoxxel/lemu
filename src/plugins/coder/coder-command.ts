@@ -197,6 +197,11 @@ const coderCommand: Command = {
         },
       );
       runtime.aiSessions.startSession(aiSession);
+      const appCtx = runtime.getContext();
+      appCtx.set('edit:ai:patches', result.patches);
+      appCtx.set('edit:ai:baseDocument', fileContent);
+      appCtx.set('edit:ai:lastResult', result);
+      appCtx.set('edit:ai:active', true);
 
       const pipeline = runtime.getEditPipeline();
       const suggestion = await pipeline.propose({

@@ -55,6 +55,8 @@ export function AiPanel({ state: _state }: AiPanelProps) {
             appCtx.set('edit:ai:active', false);
             appCtx.set('edit:ai:messages', []);
             appCtx.set('edit:ai:patches', []);
+            appCtx.remove('edit:ai:baseDocument');
+            appCtx.set('action:suffix:ai', '[off]');
           }}>&times;</button>
         </div>
         <div className="ai-panel-body">

@@ -132,7 +132,6 @@ const aiToggleAction: PluginAction = {
   type: 'edit-workflow',
   title: 'AI edit mode',
   description: 'Toggle AI-assisted editing mode. Owns plain-text input while active.',
-  ownsInput: true,
   handler: async (ctx) => {
     const runtime = getRuntime();
     const appCtx = runtime.getContext();
@@ -142,6 +141,9 @@ const aiToggleAction: PluginAction = {
     if (subcommand === 'off') {
       runtime.ownership.release('edit');
       appCtx.set('edit:ai:active', false);
+      appCtx.set('edit:ai:messages', []);
+      appCtx.set('edit:ai:patches', []);
+      appCtx.remove('edit:ai:baseDocument');
       appCtx.set('action:suffix:ai', '[off]');
       return 'AI mode OFF';
     }
