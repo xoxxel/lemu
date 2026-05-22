@@ -1059,7 +1059,7 @@
   border: 1px solid var(--lemu-border);
 }
 .ai-msg-assistant {
-  background: var(--lemu-dim-green);
+  background: #1a1a1a;
   border: 1px solid var(--lemu-border);
 }
 .ai-msg-header {

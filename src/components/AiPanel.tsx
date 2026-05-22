@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore, useRef, useCallback } from 'react';
+import { useState, useSyncExternalStore, useRef, useCallback, useEffect } from 'react';
 import { getRuntime } from '../core/runtime/instance';
 import type { AiGeneratedPatch } from '../core/coder/session';
 import { Typewriter } from './Typewriter';
@@ -16,6 +16,14 @@ function getTick(): number {
   const r = getRuntime();
   const s = r.aiSessions.activeSession;
   return s ? s.timestamp + s.acceptedCount + s.pendingCount + s.rejectedCount : Date.now();
+}
+
+function patchSummary(patch: { range: { start: number; end: number }; oldText: string; newText: string }): string {
+  const oldLen = patch.oldText ? patch.oldText.split('\n').length : 0;
+  const newLen = patch.newText ? patch.newText.split('\n').length : 0;
+  const changes = Math.max(oldLen, newLen);
+  const plural = changes !== 1 ? 's' : '';
+  return `${changes} change${plural} · lines ${patch.range.start}-${patch.range.end}`;
 }
 
 export function AiPanel({ state: _state }: AiPanelProps) {
@@ -41,6 +49,28 @@ export function AiPanel({ state: _state }: AiPanelProps) {
     next.add(msgIndex);
     setCompletedSet(next);
   }, []);
+
+  /* ── auto-scroll ── */
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const prevMsgLenRef = useRef(0);
+
+  const scrollSmooth = useCallback(() => {
+    const el = bodyRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  }, []);
+
+  const scrollInstant = useCallback(() => {
+    const el = bodyRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, []);
+
+  /* smooth-scroll when a new message appears */
+  useEffect(() => {
+    if (messages.length > prevMsgLenRef.current) {
+      prevMsgLenRef.current = messages.length;
+      scrollSmooth();
+    }
+  }, [messages.length, scrollSmooth]);
 
   /* If no session and no AI mode, show idle */
   if (!session && !aiMode) {
@@ -74,7 +104,7 @@ export function AiPanel({ state: _state }: AiPanelProps) {
             appCtx.set('action:suffix:ai', '[off]');
           }}>&times;</button>
         </div>
-        <div className="ai-panel-body">
+        <div ref={bodyRef} className="ai-panel-body">
           {messages.length === 0 && (
             <div className="ai-panel-idle">
               Type a prompt in the input bar to generate edits.
@@ -85,7 +115,7 @@ export function AiPanel({ state: _state }: AiPanelProps) {
               <div className="ai-msg-header">{msg.role === 'user' ? 'You' : 'AI'}</div>
               <div className="ai-msg-content">
                 {msg.role === 'assistant' && i === messages.length - 1 && msg.content && !completedSet.has(i) ? (
-                  <Typewriter text={msg.content} speed={18} onComplete={() => handleTypewriterComplete(i)} />
+                  <Typewriter text={msg.content} speed={18} onComplete={() => handleTypewriterComplete(i)} onTick={scrollInstant} />
                 ) : (
                   msg.content
                 )}
@@ -119,15 +149,23 @@ export function AiPanel({ state: _state }: AiPanelProps) {
 }
 
 function PatchBlockMini({ index, patch, state: st }: { index: number; patch: { range: { start: number; end: number }; oldText: string; newText: string }; state: string }) {
+  const [expanded, setExpanded] = useState(false);
   const stateClass = `ai-patch-state-${st}`;
+  const summary = patchSummary(patch);
+
   return (
-    <div className="ai-patch-view ai-patch-view-mini">
+    <div className="ai-patch-view ai-patch-view-mini" onClick={() => setExpanded(!expanded)} style={{ cursor: 'pointer' }}>
       <div className="ai-patch-header">
         <span className={stateClass}>[{index}] {st}</span>
-        <span className="ai-patch-range">offset {patch.range.start}-{patch.range.end}</span>
+        <span className="ai-patch-range" style={{ flex: 1, marginLeft: 8 }}>{summary}</span>
+        <span style={{ color: 'var(--lemu-text-dim)', fontSize: 10 }}>{expanded ? '−' : '+'}</span>
       </div>
-      {patch.oldText && <pre className="ai-patch-diff-remove">{patch.oldText}</pre>}
-      {patch.newText && <pre className="ai-patch-diff-add">{patch.newText}</pre>}
+      {expanded && (
+        <>
+          {patch.oldText && <pre className="ai-patch-diff-remove">{patch.oldText}</pre>}
+          {patch.newText && <pre className="ai-patch-diff-add">{patch.newText}</pre>}
+        </>
+      )}
     </div>
   );
 }
