@@ -5,7 +5,6 @@ import openCommand from './open';
 import copyCommand from './copy';
 import moveCommand from './move';
 import deleteCommand from './delete';
-import { replaceCommand } from './replace';
 import { EditorView } from './EditorView';
 import { fsManifest } from './manifest';
 import { fsDefaultSettings, fsSettingsSchema } from './settings';
@@ -16,7 +15,7 @@ export const fsPlugin: Plugin = {
   name: 'Filesystem',
   version: '0.1.0',
   description: 'File and directory operations (open, copy, move, delete)',
-  commands: [openCommand, copyCommand, moveCommand, deleteCommand, replaceCommand],
+  commands: [openCommand, copyCommand, moveCommand, deleteCommand],
   actions: [...standardActions, findAction],
   views: [
     {
